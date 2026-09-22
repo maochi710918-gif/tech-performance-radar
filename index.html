@@ -546,6 +546,8 @@ const METRIC_GLOSSARY = [
   { title: '單車產值指數', desc: '技師加權單台營收 ÷ 同廠正式戰力平均單台營收 × 100，反映每台車創造營收的相對水準。' },
   { title: '工資能力指數', desc: '技師平均工資占比 ÷ 同廠平均工資占比 × 100。原始資料無出勤／銷售工時欄位，故以此指數作為「工時效率」的代理指標。' },
   { title: '單台營收', desc: '（總營收 ÷ 完工台數）。畫面上呈現的是依各月接車台數加權平均後的「加權單台營收」，避免單月台數過少造成失真。' },
+  { title: '台數', desc: '進廠／完工的車輛數量（以工單為單位計數），例如「月均接車台數」代表平均每個月進廠的車輛數，是實際的車輛數量，不是金額。' },
+  { title: '月均營收', desc: '該廠／該技師「每個月」創造的總營收平均值 ＝ 月均接車台數 × 單台營收。與「單台營收」不同：單台營收是每一台車的平均產值，月均營收則是整體月營收規模，兩者相乘的關係可用來判斷是靠「量多」還是「單台產值高」創造營收。' },
   { title: '工資營收占比', desc: '工資收入 ÷ 總營收 × 100%。用來檢視營收結構中工資的占比是否合理。' },
   { title: '保固車占比', desc: '保固車台數 ÷ 總完工台數 × 100%（保固定義：施作當日距新車保固起 ≤ 3 年，且進廠里程 ≤ 10 萬公里）。' },
   { title: '月均', desc: '所選「分析區間」內的加總數值 ÷ 區間內月數，用來排除月份長短或半月資料造成的比較失真，方便跨區間比較。' },
@@ -892,7 +894,7 @@ function OverviewPage({ filteredTechs, filters, thresholds, goTech }) {
 }
 
 /* ---------------- Plants ---------------- */
-function PlantsPage({ onOpenPlant }) {
+function PlantsPage({ onOpenPlant, thresholds }) {
   const th = chartTheme();
   const [sortKey, setSortKey] = useState('avgIndex');
   const withRevenue = useMemo(() => PLANTS.map(p => Object.assign({}, p, { avgMonthlyRevenue: p.avgMonthlyIntake * p.avgRevPerUnit })), []);
@@ -917,6 +919,7 @@ function PlantsPage({ onOpenPlant }) {
   ];
 
   return React.createElement('div', null,
+    React.createElement('div', { style: { display: 'flex', justifyContent: 'flex-end', marginBottom: 8 } }, React.createElement(GlossaryButton, { thresholds })),
     React.createElement('div', { className: 'grid grid-2' },
       React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '各廠月均接車台數'), React.createElement(ChartCanvas, { type: 'bar', data: barData, height: 340 })),
       React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '各廠月均營收'), React.createElement(ChartCanvas, { type: 'bar', data: barData2, height: 340 }))
