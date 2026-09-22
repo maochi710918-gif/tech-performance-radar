@@ -112,8 +112,9 @@
   .nav-item{display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:9px; font-size:13.5px; color:var(--sidebar-text); cursor:pointer; margin-bottom:2px; border:1px solid transparent; transition:background .12s;}
   .nav-item:hover{background:rgba(255,255,255,0.06);}
   .nav-item.active{background:var(--bg-sidebar-active); color:#fff; border-color:rgba(255,255,255,0.08);}
-  .nav-item.active .nav-dot{background:var(--accent);}
-  .nav-dot{width:6px; height:6px; border-radius:50%; background:var(--sidebar-text-dim); flex:none;}
+  .nav-icon{display:flex; flex:none; color:var(--sidebar-text-dim); transition:color .12s;}
+  .nav-item.active .nav-icon, .nav-item:hover .nav-icon{color:var(--accent);}
+  .nav-icon-svg{display:block;}
   .nav-section-label{font-size:10px; letter-spacing:.08em; color:var(--sidebar-text-dim); padding:14px 12px 4px; text-transform:uppercase;}
   .sidebar-foot{padding:12px 14px 16px; border-top:1px solid rgba(255,255,255,0.07); font-size:11.5px; color:var(--sidebar-text-dim);}
   .role-pill{display:inline-flex; align-items:center; gap:6px; background:rgba(255,255,255,0.06); color:#fff; padding:5px 10px; border-radius:999px; font-size:11.5px; margin-bottom:8px;}
@@ -584,6 +585,29 @@ function aggregateForPeriod(techs, month) {
 }
 function deltaPct(cur, prev) { if (cur == null || prev == null || prev === 0) return null; return (cur - prev) / Math.abs(prev); }
 
+/* ---------------- nav icons ---------------- */
+const ICON_SHAPES = {
+  overview: [['rect', { x: 3, y: 3, width: 6, height: 6, rx: 1.2 }], ['rect', { x: 11, y: 3, width: 6, height: 6, rx: 1.2 }], ['rect', { x: 3, y: 11, width: 6, height: 6, rx: 1.2 }], ['rect', { x: 11, y: 11, width: 6, height: 6, rx: 1.2 }]],
+  plants: [['path', { d: 'M3 17V9l4-2v3l4-2v3l4-2v8' }], ['path', { d: 'M3 17h14' }]],
+  roster: [['line', { x1: 4, y1: 5, x2: 16, y2: 5 }], ['line', { x1: 4, y1: 10, x2: 16, y2: 10 }], ['line', { x1: 4, y1: 15, x2: 16, y2: 15 }], ['circle', { cx: 4, cy: 5, r: 0.9, fill: 'currentColor', stroke: 'none' }]],
+  techDetail: [['circle', { cx: 10, cy: 7, r: 3 }], ['path', { d: 'M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6' }]],
+  tenure: [['circle', { cx: 10, cy: 10, r: 7 }], ['path', { d: 'M10 6v4l3 2' }]],
+  mileage: [['path', { d: 'M3 14a7 7 0 0 1 14 0' }], ['path', { d: 'M10 14l3-4' }], ['circle', { cx: 10, cy: 14, r: 1, fill: 'currentColor', stroke: 'none' }]],
+  revenue: [['circle', { cx: 10, cy: 10, r: 7 }], ['path', { d: 'M10 3v7h7' }]],
+  trend: [['path', { d: 'M3 14l5-5 3 3 6-7' }], ['path', { d: 'M13 5h4v4' }]],
+  ranking: [['path', { d: 'M6 4h8l-1 5a3 3 0 0 1-6 0L6 4z' }], ['path', { d: 'M9 12v2h2v-2' }], ['path', { d: 'M7 16h6' }]],
+  import: [['path', { d: 'M10 3v9' }], ['path', { d: 'M6.5 8.5L10 5l3.5 3.5' }], ['path', { d: 'M4 14v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2' }]],
+  settings: [['line', { x1: 4, y1: 5, x2: 16, y2: 5 }], ['circle', { cx: 8, cy: 5, r: 1.6 }], ['line', { x1: 4, y1: 10, x2: 16, y2: 10 }], ['circle', { cx: 13, cy: 10, r: 1.6 }], ['line', { x1: 4, y1: 15, x2: 16, y2: 15 }], ['circle', { cx: 7, cy: 15, r: 1.6 }]],
+  roles: [['path', { d: 'M10 3l6 2v5c0 4-2.7 6.5-6 7-3.3-.5-6-3-6-7V5l6-2z' }]],
+};
+function NavIcon({ name }) {
+  const shapes = ICON_SHAPES[name] || [];
+  const common = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round' };
+  return React.createElement('svg', { viewBox: '0 0 20 20', width: 17, height: 17, className: 'nav-icon-svg' },
+    shapes.map(([tag, props], i) => React.createElement(tag, Object.assign({ key: i }, common, props)))
+  );
+}
+
 /* ================= App ================= */
 const NAV = [
   { key: 'overview', label: '綜合總覽', section: '分析' },
@@ -661,7 +685,7 @@ function App() {
             items.map(n => React.createElement('div', {
               key: n.key, className: 'nav-item' + (page === n.key ? ' active' : ''),
               onClick: () => setPage(n.key)
-            }, React.createElement('span', { className: 'nav-dot' }), n.label))
+            }, React.createElement('span', { className: 'nav-icon' }, React.createElement(NavIcon, { name: n.key })), n.label))
           );
         })
       ),
@@ -721,10 +745,11 @@ function GlobalFilterBar({ filters, setFilters, role }) {
 function OverviewPage({ filteredTechs, filters, thresholds, goTech }) {
   const cur = useMemo(() => aggregateForPeriod(filteredTechs, filters.kpiMonth), [filteredTechs, filters.kpiMonth]);
   const prev = useMemo(() => aggregateForPeriod(filteredTechs, filters.kpiMonth - 1), [filteredTechs, filters.kpiMonth]);
+  const monthCount = filters.to - filters.from + 1;
   const cumulative = useMemo(() => {
     let intake = 0, revenue = 0;
     filteredTechs.forEach(t => { intake += techTotalIntake(t, filters.from, filters.to); revenue += techTotalRevenue(t, filters.from, filters.to); });
-    return { intake, revenue };
+    return { intake, revenue, avgIntake: monthCount > 0 ? intake / monthCount : null, avgRevenue: monthCount > 0 ? revenue / monthCount : null };
   }, [filteredTechs, filters.from, filters.to]);
 
   const counts = useMemo(() => {
@@ -777,7 +802,9 @@ function OverviewPage({ filteredTechs, filters, thresholds, goTech }) {
       React.createElement(Kpi, { label: '工資營收占比', value: cur.avgLaborRatio, prevValue: prev.avgLaborRatio, deltaPct: deltaPct(cur.avgLaborRatio, prev.avgLaborRatio), formatter: v => fmtPct(v, 1) }),
       React.createElement(Kpi, { label: '保固車占比', value: cur.avgWarrantyRatio, prevValue: prev.avgWarrantyRatio, deltaPct: deltaPct(cur.avgWarrantyRatio, prev.avgWarrantyRatio), higherIsBetter: false, formatter: v => fmtPct(v, 1) }),
       React.createElement(Kpi, { label: '平均進廠里程（估）', value: cur.avgMileage, prevValue: prev.avgMileage, deltaPct: deltaPct(cur.avgMileage, prev.avgMileage), higherIsBetter: null, formatter: fmtKm }),
-      React.createElement(Kpi, { label: '分析區間累計台數', value: cumulative.intake, formatter: fmtInt })
+      React.createElement(Kpi, { label: '分析區間累計台數', value: cumulative.intake, formatter: fmtInt }),
+      React.createElement(Kpi, { label: '月均接車台數', value: cumulative.avgIntake, formatter: v => fmtNum(v, 1) }),
+      React.createElement(Kpi, { label: '月均估算營收', value: cumulative.avgRevenue, formatter: fmtMoney })
     ),
     React.createElement('div', { className: 'grid grid-kpi', style: { marginTop: 14 } },
       React.createElement(Kpi, { label: '正式戰力／觀察期', value: (counts.qual['正式戰力'] || 0) + ' / ' + (counts.qual['觀察期'] || 0), formatter: v => v }),
@@ -813,7 +840,8 @@ function OverviewPage({ filteredTechs, filters, thresholds, goTech }) {
 function PlantsPage({ onOpenPlant }) {
   const th = chartTheme();
   const [sortKey, setSortKey] = useState('avgIndex');
-  const rows = useMemo(() => [...PLANTS].sort((a, b) => (b[sortKey] || 0) - (a[sortKey] || 0)), [sortKey]);
+  const withRevenue = useMemo(() => PLANTS.map(p => Object.assign({}, p, { avgMonthlyRevenue: p.avgMonthlyIntake * p.avgRevPerUnit })), []);
+  const rows = useMemo(() => [...withRevenue].sort((a, b) => (b[sortKey] || 0) - (a[sortKey] || 0)), [withRevenue, sortKey]);
 
   const barData = useMemo(() => ({
     labels: PLANTS.map(p => p.name),
@@ -823,27 +851,27 @@ function PlantsPage({ onOpenPlant }) {
   }), []);
   const barData2 = useMemo(() => ({
     labels: PLANTS.map(p => p.name),
-    datasets: [{ label: '單台營收(元)', data: PLANTS.map(p => Math.round(p.avgRevPerUnit)), backgroundColor: th.series[2], borderRadius: 4, maxBarThickness: 22 }]
-  }), []);
+    datasets: [{ label: '月均營收(元)', data: withRevenue.map(p => Math.round(p.avgMonthlyRevenue)), backgroundColor: th.series[2], borderRadius: 4, maxBarThickness: 22 }]
+  }), [withRevenue]);
 
   const cols = [
     ['name', '廠別'], ['techCount', '技師數'], ['formal', '正式戰力'], ['observation', '觀察期'],
     ['core', '核心戰力'], ['highVolume', '高產能'], ['highValue', '高產值'], ['needsImprovement', '需改善'],
-    ['coreRate', '核心率'], ['avgMonthlyIntake', '月均接車'], ['avgRevPerUnit', '單台營收'],
+    ['coreRate', '核心率'], ['avgMonthlyIntake', '月均接車'], ['avgRevPerUnit', '單台營收'], ['avgMonthlyRevenue', '月均營收'],
     ['avgLaborRatio', '工資比'], ['pct10wUp', '10萬以上%'], ['warrantyRatio', '保固車占比'],
   ];
 
   return React.createElement('div', null,
     React.createElement('div', { className: 'grid grid-2' },
       React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '各廠月均接車台數'), React.createElement(ChartCanvas, { type: 'bar', data: barData, height: 340 })),
-      React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '各廠單台營收'), React.createElement(ChartCanvas, { type: 'bar', data: barData2, height: 340 }))
+      React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '各廠月均營收'), React.createElement(ChartCanvas, { type: 'bar', data: barData2, height: 340 }))
     ),
     React.createElement('div', { className: 'card', style: { marginTop: 14 } },
       React.createElement('div', { className: 'card-title' }, '各廠戰力總覽',
         React.createElement(Select, {
           value: sortKey, onChange: setSortKey, options: [
             { value: 'avgIndex', label: '依平均戰力指數排序' }, { value: 'avgRevPerUnit', label: '依單台營收排序' },
-            { value: 'avgMonthlyIntake', label: '依月均接車排序' }, { value: 'coreRate', label: '依核心率排序' },
+            { value: 'avgMonthlyIntake', label: '依月均接車排序' }, { value: 'avgMonthlyRevenue', label: '依月均營收排序' }, { value: 'coreRate', label: '依核心率排序' },
             { value: 'needsImprovement', label: '依需改善人數排序' },
           ]
         })
@@ -855,7 +883,7 @@ function PlantsPage({ onOpenPlant }) {
             cols.map(([k]) => {
               let v = p[k];
               const isPct = ['coreRate', 'avgLaborRatio', 'pct10wUp', 'warrantyRatio'].includes(k);
-              const isMoney = k === 'avgRevPerUnit';
+              const isMoney = k === 'avgRevPerUnit' || k === 'avgMonthlyRevenue';
               const isNum = typeof v === 'number' && !isPct && !isMoney;
               return React.createElement('td', { key: k, className: (isPct || isMoney || isNum) ? 'num-cell' : '' },
                 isPct ? fmtPct(v, 1) : isMoney ? fmtMoney(v) : isNum ? fmtNum(v, 1) : v
@@ -889,6 +917,10 @@ const ROSTER_COLS = [
   { key: 'avgMonthlyIntake', label: '月均接車', fmt: v => fmtNum(v, 1), num: true },
   { key: 'capacityIndex', label: '接車產能指數', fmt: v => fmtNum(v, 1), num: true },
   { key: 'weightedRevPerUnit', label: '單台營收', fmt: fmtMoney, num: true },
+  {
+    key: 'avgMonthlyRevenue', label: '月均營收', fmt: fmtMoney, num: true,
+    get: (t, f) => { const mc = f.to - f.from + 1; return mc > 0 ? techTotalRevenue(t, f.from, f.to) / mc : null; },
+  },
   { key: 'valueIndex', label: '單車產值指數', fmt: v => fmtNum(v, 1), num: true },
   { key: 'avgLaborRatio', label: '工資占比', fmt: v => fmtPct(v, 1), num: true },
   { key: 'laborIndex', label: '工資能力指數', fmt: v => fmtNum(v, 1), num: true },
@@ -899,30 +931,33 @@ const ROSTER_COLS = [
   { key: 'type', label: '戰力類型' },
   { key: 'plantRank', label: '廠內排名', num: true },
 ];
-const ROSTER_DEFAULT_VISIBLE = ['plant', 'name', 'tenure', 'avgMonthlyIntake', 'weightedRevPerUnit', 'avgLaborRatio', 'warrantyRatio', 'compositeIndex', 'qualification', 'type', 'plantRank'];
+const ROSTER_DEFAULT_VISIBLE = ['plant', 'name', 'tenure', 'avgMonthlyIntake', 'weightedRevPerUnit', 'avgMonthlyRevenue', 'avgLaborRatio', 'warrantyRatio', 'compositeIndex', 'qualification', 'type', 'plantRank'];
 
-function RosterPage({ filteredTechs, thresholds, goTech }) {
+function RosterPage({ filteredTechs, filters, thresholds, goTech }) {
   const [sort, setSort] = useState({ key: 'compositeIndex', dir: -1 });
   const [visibleCols, setVisibleCols] = useState(ROSTER_DEFAULT_VISIBLE);
   const [showColPicker, setShowColPicker] = useState(false);
   const [showExport, setShowExport] = useState(false);
 
+  function colValue(col, t) { return col.get ? col.get(t, filters) : t[col.key]; }
+
   const sorted = useMemo(() => {
+    const col = ROSTER_COLS.find(c => c.key === sort.key);
     const arr = [...filteredTechs];
     arr.sort((a, b) => {
-      const va = a[sort.key], vb = b[sort.key];
+      const va = col ? colValue(col, a) : a[sort.key], vb = col ? colValue(col, b) : b[sort.key];
       if (va == null) return 1; if (vb == null) return -1;
       if (typeof va === 'string') return va.localeCompare(vb) * sort.dir;
       return (va - vb) * sort.dir;
     });
     return arr;
-  }, [filteredTechs, sort]);
+  }, [filteredTechs, sort, filters]);
 
   const cols = ROSTER_COLS.filter(c => visibleCols.includes(c.key));
 
   function toggleSort(key) { setSort(s => s.key === key ? { key, dir: -s.dir } : { key, dir: -1 }); }
 
-  const exportRows = sorted.map(t => cols.map(c => c.fmt ? c.fmt(t[c.key]) : t[c.key]));
+  const exportRows = sorted.map(t => cols.map(c => c.fmt ? c.fmt(colValue(c, t)) : colValue(c, t)));
 
   return React.createElement('div', null,
     React.createElement('div', { className: 'card' },
@@ -950,7 +985,7 @@ function RosterPage({ filteredTechs, thresholds, goTech }) {
           React.createElement('tbody', null, sorted.map(t => {
             const rag = techOverallRag(t, thresholds);
             return React.createElement('tr', { key: techKey(t), onClick: () => goTech(techKey(t)) },
-              cols.map(c => React.createElement('td', { key: c.key, className: c.num ? 'num-cell' : '' }, c.fmt ? c.fmt(t[c.key]) : t[c.key])),
+              cols.map(c => React.createElement('td', { key: c.key, className: c.num ? 'num-cell' : '' }, c.fmt ? c.fmt(colValue(c, t)) : colValue(c, t))),
               React.createElement('td', null, React.createElement(RagBadge, { rag }))
             );
           }))
@@ -1042,6 +1077,8 @@ function TechDetailPage({ techKey: selKey, setTechKey, thresholds, role }) {
         React.createElement('div', { className: 'grid grid-kpi' },
           React.createElement(Kpi, { label: 'YTD 接車台數', value: techTotalIntake(tech, 1, 8), formatter: fmtInt }),
           React.createElement(Kpi, { label: 'YTD 估算總營收', value: techTotalRevenue(tech, 1, 8), formatter: fmtMoney }),
+          React.createElement(Kpi, { label: '月均接車台數', value: tech.avgMonthlyIntake, formatter: v => fmtNum(v, 1) }),
+          React.createElement(Kpi, { label: '月均估算營收', value: tech.avgMonthlyIntake * tech.weightedRevPerUnit, formatter: fmtMoney }),
           React.createElement(Kpi, { label: '單台營收', value: tech.weightedRevPerUnit, formatter: fmtMoney }),
           React.createElement(Kpi, { label: '單台工資（估）', value: tech.weightedRevPerUnit * tech.avgLaborRatio, formatter: fmtMoney }),
           React.createElement(Kpi, { label: '工資營收占比', value: tech.avgLaborRatio, formatter: v => fmtPct(v, 1) }),
@@ -1080,6 +1117,7 @@ function TenurePage({ filteredTechs }) {
     return {
       key: b.key, label: b.label, count: ts.length,
       avgIntake: mean(ts.map(t => t.avgMonthlyIntake)), avgRev: mean(ts.map(t => t.weightedRevPerUnit)),
+      avgMonthlyRevenue: mean(ts.map(t => t.avgMonthlyIntake * t.weightedRevPerUnit)),
       avgLabor: mean(ts.map(t => t.avgLaborRatio)), avgWarranty: mean(ts.map(t => t.warrantyRatio)),
       avgCapacity: mean(ts.map(t => t.capacityIndex)), avgValue: mean(ts.map(t => t.valueIndex)),
       avgLaborIdx: mean(ts.map(t => t.laborIndex)), avgComposite: mean(ts.map(t => t.compositeIndex)),
@@ -1113,10 +1151,11 @@ function TenurePage({ filteredTechs }) {
     ),
     React.createElement('div', { className: 'table-wrap card', style: { marginTop: 14, padding: 0 } },
       React.createElement('table', null,
-        React.createElement('thead', null, React.createElement('tr', null, ['年資區間', '技師數', '平均月接車', '平均單台營收', '平均工資占比', '平均保固占比', '平均綜合指數'].map(h => React.createElement('th', { key: h }, h)))),
+        React.createElement('thead', null, React.createElement('tr', null, ['年資區間', '技師數', '月均接車', '單台營收', '月均營收', '平均工資占比', '平均保固占比', '平均綜合指數'].map(h => React.createElement('th', { key: h }, h)))),
         React.createElement('tbody', null, groups.map(g => React.createElement('tr', { key: g.key },
           React.createElement('td', null, g.label), React.createElement('td', { className: 'num-cell' }, g.count),
           React.createElement('td', { className: 'num-cell' }, fmtNum(g.avgIntake, 1)), React.createElement('td', { className: 'num-cell' }, fmtMoney(g.avgRev)),
+          React.createElement('td', { className: 'num-cell' }, fmtMoney(g.avgMonthlyRevenue)),
           React.createElement('td', { className: 'num-cell' }, fmtPct(g.avgLabor, 1)), React.createElement('td', { className: 'num-cell' }, fmtPct(g.avgWarranty, 1)),
           React.createElement('td', { className: 'num-cell' }, fmtNum(g.avgComposite, 1))
         )))
@@ -1133,10 +1172,11 @@ function TenurePage({ filteredTechs }) {
 /* ---------------- Mileage analysis ---------------- */
 function MileagePage({ filteredTechs, filters }) {
   const th = chartTheme();
+  const monthCount = filters.to - filters.from + 1;
   const rows = MILEAGE_BUCKETS.map(b => {
     let count = 0;
     filteredTechs.forEach(t => { for (let m = filters.from; m <= filters.to; m++) { const r = techMonthly(t, m); if (r && typeof r[b.key] === 'number') count += r[b.key]; } });
-    return { key: b.key, label: b.label, count };
+    return { key: b.key, label: b.label, count, avgMonthlyCount: monthCount > 0 ? count / monthCount : null };
   });
   const totalCount = rows.reduce((a, r) => a + r.count, 0) || 1;
   const avgRev = mean(filteredTechs.map(t => t.weightedRevPerUnit)) || 0;
@@ -1164,13 +1204,16 @@ function MileagePage({ filteredTechs, filters }) {
         React.createElement('div', { className: 'card-title' }, '各里程區間統計（估算營收）', React.createElement('span', { className: 'hint' }, '以平均單台營收估算')),
         React.createElement('div', { className: 'table-wrap' },
           React.createElement('table', null,
-            React.createElement('thead', null, React.createElement('tr', null, ['里程區間', '台數', '占比', '估算營收', '營收占比'].map(h => React.createElement('th', { key: h }, h)))),
+            React.createElement('thead', null, React.createElement('tr', null, ['里程區間', '台數', '月均台數', '占比', '估算營收', '月均營收', '營收占比'].map(h => React.createElement('th', { key: h }, h)))),
             React.createElement('tbody', null, rows.map(r => {
               const revEst = r.count * avgRev; const revShare = revEst / (totalCount * avgRev || 1);
               return React.createElement('tr', { key: r.key },
                 React.createElement('td', null, r.label), React.createElement('td', { className: 'num-cell' }, fmtInt(r.count)),
+                React.createElement('td', { className: 'num-cell' }, fmtNum(r.avgMonthlyCount, 1)),
                 React.createElement('td', { className: 'num-cell' }, fmtPct(r.count / totalCount, 1)),
-                React.createElement('td', { className: 'num-cell' }, fmtMoney(revEst)), React.createElement('td', { className: 'num-cell' }, fmtPct(revShare, 1))
+                React.createElement('td', { className: 'num-cell' }, fmtMoney(revEst)),
+                React.createElement('td', { className: 'num-cell' }, fmtMoney(monthCount > 0 ? revEst / monthCount : null)),
+                React.createElement('td', { className: 'num-cell' }, fmtPct(revShare, 1))
               );
             }))
           )
@@ -1269,6 +1312,8 @@ function TrendPage({ filteredTechs, role }) {
 /* ---------------- Ranking & alerts ---------------- */
 const RANK_METRICS = [
   { key: 'revenue', label: '估算總營收（區間累計）', get: (t, f) => techTotalRevenue(t, f.from, f.to), fmt: fmtMoney },
+  { key: 'monthlyRevenue', label: '月均營收', get: (t, f) => { const mc = f.to - f.from + 1; return mc > 0 ? techTotalRevenue(t, f.from, f.to) / mc : null; }, fmt: fmtMoney },
+  { key: 'monthlyIntake', label: '月均接車台數', get: t => t.avgMonthlyIntake, fmt: v => fmtNum(v, 1) },
   { key: 'avgRev', label: '單台營收', get: t => t.weightedRevPerUnit, fmt: fmtMoney },
   { key: 'avgWage', label: '單台工資（估）', get: t => t.weightedRevPerUnit * t.avgLaborRatio, fmt: fmtMoney },
   { key: 'laborIndex', label: '工資能力指數（工時效率代理）', get: t => t.laborIndex, fmt: v => fmtNum(v, 1) },
