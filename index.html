@@ -539,6 +539,56 @@ function ExportModal({ title, headers, rows, onClose }) {
   );
 }
 
+/* ---------------- glossary ---------------- */
+const METRIC_GLOSSARY = [
+  { title: '綜合戰力指數', desc: '以「同廠正式戰力技師」平均為 100，由接車產能指數（權重35%）、單車產值指數（35%）、工資能力指數（30%）加權計算，用來比較同廠技師的整體戰力水準。' },
+  { title: '接車產能指數', desc: '技師月均接車台數 ÷ 同廠正式戰力平均月接車台數 × 100，數值愈高代表接車量相對同廠愈高。' },
+  { title: '單車產值指數', desc: '技師加權單台營收 ÷ 同廠正式戰力平均單台營收 × 100，反映每台車創造營收的相對水準。' },
+  { title: '工資能力指數', desc: '技師平均工資占比 ÷ 同廠平均工資占比 × 100。原始資料無出勤／銷售工時欄位，故以此指數作為「工時效率」的代理指標。' },
+  { title: '單台營收', desc: '（總營收 ÷ 完工台數）。畫面上呈現的是依各月接車台數加權平均後的「加權單台營收」，避免單月台數過少造成失真。' },
+  { title: '工資營收占比', desc: '工資收入 ÷ 總營收 × 100%。用來檢視營收結構中工資的占比是否合理。' },
+  { title: '保固車占比', desc: '保固車台數 ÷ 總完工台數 × 100%（保固定義：施作當日距新車保固起 ≤ 3 年，且進廠里程 ≤ 10 萬公里）。' },
+  { title: '月均', desc: '所選「分析區間」內的加總數值 ÷ 區間內月數，用來排除月份長短或半月資料造成的比較失真，方便跨區間比較。' },
+  { title: '戰力資格（正式戰力／觀察期）', desc: '有效上線月數達 3 個月以上才列入「正式戰力」比較基準；未滿 3 個月列為「觀察期」，暫不納入同廠平均計算。' },
+  { title: '戰力類型（核心戰力／高產能／高產值／需改善）', desc: '依接車產能、單車產值、工資能力三項指數相對同廠水準，綜合判讀出的分類標籤，用於快速辨識技師的戰力特徵。' },
+];
+function alertGlossary(th) {
+  return [
+    { title: '綜合戰力指數低於警戒值', desc: '綜合戰力指數低於目前設定的黃燈門檻（' + th.compositeWarn + '）。' },
+    { title: '單台營收低於同廠平均 X%', desc: '單台營收低於同廠平均，落差達目前設定門檻（' + th.revGapPct + '%）以上。' },
+    { title: '工資營收占比偏離合理區間', desc: '工資占比超出目前設定的合理區間（' + fmtPct(th.laborLow, 0) + '–' + fmtPct(th.laborHigh, 0) + '）。' },
+    { title: '保固車占比明顯高於同廠平均', desc: '保固車占比相對同廠平均高出目前設定門檻（' + th.warrantyGapPct + '%）以上，可能影響單台營收的判讀。' },
+    { title: '接車台數／單台營收連續2個月下滑', desc: '最近兩個月的數值呈現連續下降趨勢，提醒留意近期表現。' },
+    { title: '高年資但綜合戰力低於同年資水準', desc: '年資達到目前設定門檻（' + th.seniorYears + ' 年以上），但綜合戰力指數仍低於黃燈門檻，顯示資深技師績效低於預期。' },
+    { title: '新進技師績效成長速度低於預期', desc: '到職未滿目前設定年限（' + th.newHireYears + ' 年），但綜合戰力指數尚未達到黃燈門檻，顯示上手速度偏慢。' },
+    { title: '有效上線月數不足，資料樣本不足以判定戰力', desc: '有效上線月數少於 2 個月，樣本太少無法可靠評估績效，暫列為灰燈「無資料」，不計入紅／黃燈統計。' },
+  ];
+}
+function GlossaryModal({ thresholds, onClose }) {
+  return React.createElement(Modal, { title: '名詞說明', onClose, wide: true },
+    React.createElement('h4', { style: { fontSize: 13, marginBottom: 8 } }, '指標名詞'),
+    React.createElement('div', { className: 'flag-list', style: { marginBottom: 16 } },
+      METRIC_GLOSSARY.map((g, i) => React.createElement('div', { key: i, className: 'flag-row', style: { flexDirection: 'column', alignItems: 'stretch', background: 'var(--bg-surface-2)' } },
+        React.createElement('b', null, g.title), React.createElement('span', { className: 'foot-note' }, g.desc)
+      ))
+    ),
+    React.createElement('h4', { style: { fontSize: 13, marginBottom: 8 } }, '異常提醒類型'),
+    React.createElement('div', { className: 'flag-list' },
+      alertGlossary(thresholds).map((g, i) => React.createElement('div', { key: i, className: 'flag-row', style: { flexDirection: 'column', alignItems: 'stretch' } },
+        React.createElement('b', null, g.title), React.createElement('span', { className: 'foot-note' }, g.desc)
+      ))
+    ),
+    React.createElement('p', { className: 'foot-note', style: { marginTop: 14 } }, '燈號說明：', React.createElement(RagBadge, { rag: 'good' }), ' 達標　', React.createElement(RagBadge, { rag: 'warn' }), ' 接近門檻　', React.createElement(RagBadge, { rag: 'critical' }), ' 異常　', React.createElement(RagBadge, { rag: 'gray' }), ' 無資料。門檻值可於「指標與門檻設定」頁調整。')
+  );
+}
+function GlossaryButton({ thresholds }) {
+  const [open, setOpen] = useState(false);
+  return React.createElement(React.Fragment, null,
+    React.createElement('button', { className: 'btn btn-ghost btn-sm', onClick: () => setOpen(true) }, 'ⓘ 名詞說明'),
+    open ? React.createElement(GlossaryModal, { thresholds, onClose: () => setOpen(false) }) : null
+  );
+}
+
 /* ---------------- global filter context ---------------- */
 function defaultFilters() {
   return { plant: 'all', tenure: 'all', qualification: 'all', type: 'all', search: '', from: 1, to: 8, kpiMonth: 8 };
@@ -823,7 +873,12 @@ function OverviewPage({ filteredTechs, filters, thresholds, goTech }) {
       )
     ),
     React.createElement('div', { className: 'card', style: { marginTop: 14 } },
-      React.createElement('div', { className: 'card-title' }, '重點異常提醒', React.createElement('span', { className: 'hint' }, '紅燈技師（前 6 位）')),
+      React.createElement('div', { className: 'card-title' }, '重點異常提醒',
+        React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+          React.createElement('span', { className: 'hint' }, '紅燈技師（前 6 位）'),
+          React.createElement(GlossaryButton, { thresholds })
+        )
+      ),
       topAlerts.length ? React.createElement('div', { className: 'flag-list' },
         topAlerts.map(({ t, flags }) => React.createElement('div', { key: techKey(t), className: 'flag-row', onClick: () => goTech(techKey(t)), style: { cursor: 'pointer' } },
           React.createElement(RagBadge, { rag: 'critical' }),
@@ -1102,7 +1157,7 @@ function TechDetailPage({ techKey: selKey, setTechKey, thresholds, role }) {
       React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, 'YTD 進廠里程結構'), React.createElement(ChartCanvas, { type: 'bar', data: mileageBar, height: 260, options: { plugins: { legend: { display: false } } } }))
     ),
     React.createElement('div', { className: 'card', style: { marginTop: 14 } },
-      React.createElement('div', { className: 'card-title' }, '異常提醒'),
+      React.createElement('div', { className: 'card-title' }, '異常提醒', React.createElement(GlossaryButton, { thresholds })),
       alerts.length ? React.createElement('div', { className: 'flag-list' }, alerts.map((f, i) => React.createElement('div', { key: i, className: 'flag-row' }, React.createElement(RagBadge, { rag: f.sev }), React.createElement('span', null, f.label))))
         : React.createElement('div', { className: 'empty-state' }, '目前沒有異常提醒。')
     )
@@ -1349,10 +1404,14 @@ function RankingPage({ filteredTechs, filters, thresholds, goTech }) {
     }), [filteredTechs, thresholds]);
 
   return React.createElement('div', null,
-    React.createElement('div', { className: 'tabs' },
-      React.createElement('div', { className: 'tab' + (tab === 'ranking' ? ' active' : ''), onClick: () => setTab('ranking') }, '排行榜'),
-      React.createElement('div', { className: 'tab' + (tab === 'alerts' ? ' active' : ''), onClick: () => setTab('alerts') }, '異常提醒清單 (' + alertRows.length + ')')
+    React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 } },
+      React.createElement('div', { className: 'tabs', style: { marginBottom: 0, border: 'none' } },
+        React.createElement('div', { className: 'tab' + (tab === 'ranking' ? ' active' : ''), onClick: () => setTab('ranking') }, '排行榜'),
+        React.createElement('div', { className: 'tab' + (tab === 'alerts' ? ' active' : ''), onClick: () => setTab('alerts') }, '異常提醒清單 (' + alertRows.length + ')')
+      ),
+      React.createElement(GlossaryButton, { thresholds })
     ),
+    React.createElement('div', { style: { borderBottom: '1px solid var(--border)', marginBottom: 14 } }),
     React.createElement('p', { className: 'foot-note', style: { marginBottom: 12 } }, '排行榜與異常清單皆套用頁首目前的全域篩選條件（服務廠／年資／戰力資格等），可用來查看「同廠排名」或「同年資排名」。'),
     tab === 'ranking' ? React.createElement(React.Fragment, null,
       React.createElement('div', { className: 'filter-bar', style: { marginTop: 0, marginBottom: 12 } },
