@@ -1,0 +1,1502 @@
+<title>戰力雷達</title>
+<meta name="description" content="汽車服務廠技師績效分析儀表板">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    color-scheme: light;
+    --bg-page:#f4f5f8;
+    --bg-surface:#ffffff;
+    --bg-surface-2:#eef0f4;
+    --bg-sidebar:#0a0f1e;
+    --bg-sidebar-2:#0f1830;
+    --bg-sidebar-active:#161f3d;
+    --text-primary:#10131c;
+    --text-secondary:#4c5164;
+    --text-muted:#868b9e;
+    --border:rgba(16,19,28,0.10);
+    --border-strong:rgba(16,19,28,0.18);
+    --accent:#c3002f;
+    --accent-ink:#ffffff;
+    --accent-soft:rgba(195,0,47,0.10);
+    --good:#0ca30c;
+    --warning:#c98500;
+    --serious:#ec835a;
+    --critical:#d03b3b;
+    --gray:#9aa0b4;
+    --series-1:#2a78d6;
+    --series-2:#eb6834;
+    --series-3:#1baf7a;
+    --series-4:#eda100;
+    --series-5:#e87ba4;
+    --shadow:0 1px 2px rgba(16,19,28,0.06), 0 8px 24px -12px rgba(16,19,28,0.12);
+    --sidebar-text:#c7cbe0;
+    --sidebar-text-dim:#7d84a3;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      color-scheme: dark;
+      --bg-page:#0b0d13;
+      --bg-surface:#141822;
+      --bg-surface-2:#1b202c;
+      --text-primary:#f3f4f8;
+      --text-secondary:#b7bcd0;
+      --text-muted:#7d84a0;
+      --border:rgba(255,255,255,0.10);
+      --border-strong:rgba(255,255,255,0.16);
+      --accent:#ff5468;
+      --accent-ink:#170406;
+      --accent-soft:rgba(255,84,104,0.16);
+      --good:#0ca30c;
+      --warning:#fab219;
+      --serious:#ec835a;
+      --critical:#e66767;
+      --gray:#6b7086;
+      --series-1:#3987e5;
+      --series-2:#d95926;
+      --series-3:#199e70;
+      --series-4:#c98500;
+      --series-5:#d55181;
+      --shadow:0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --bg-page:#0b0d13;
+    --bg-surface:#141822;
+    --bg-surface-2:#1b202c;
+    --text-primary:#f3f4f8;
+    --text-secondary:#b7bcd0;
+    --text-muted:#7d84a0;
+    --border:rgba(255,255,255,0.10);
+    --border-strong:rgba(255,255,255,0.16);
+    --accent:#ff5468;
+    --accent-ink:#170406;
+    --accent-soft:rgba(255,84,104,0.16);
+    --good:#0ca30c;
+    --warning:#fab219;
+    --serious:#ec835a;
+    --critical:#e66767;
+    --gray:#6b7086;
+    --series-1:#3987e5;
+    --series-2:#d95926;
+    --series-3:#199e70;
+    --series-4:#c98500;
+    --series-5:#d55181;
+    --shadow:0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+  }
+
+  *{box-sizing:border-box;}
+  body{background:var(--bg-page); color:var(--text-primary); font-family:'Noto Sans TC','Segoe UI',-apple-system,sans-serif;}
+  .num{font-family:'Oswald','Noto Sans TC',sans-serif; font-variant-numeric:tabular-nums;}
+  h1,h2,h3,h4{text-wrap:balance; margin:0;}
+  button{font-family:inherit;}
+  ::-webkit-scrollbar{width:10px; height:10px;}
+  ::-webkit-scrollbar-thumb{background:var(--border-strong); border-radius:6px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+
+  #root{min-height:100%;}
+  .app-shell{display:flex; min-height:100vh; width:100%;}
+
+  .sidebar{
+    width:236px; flex:0 0 236px; background:linear-gradient(180deg,var(--bg-sidebar-2),var(--bg-sidebar) 60%);
+    color:var(--sidebar-text); display:flex; flex-direction:column; position:sticky; top:0; height:100vh; z-index:20;
+    border-right:1px solid rgba(255,255,255,0.06);
+  }
+  .brand{display:flex; align-items:center; gap:10px; padding:20px 18px 14px;}
+  .brand-mark{width:34px; height:34px; border-radius:9px; background:var(--accent); display:flex; align-items:center; justify-content:center; font-family:'Oswald'; font-weight:700; color:var(--accent-ink); font-size:15px; flex:none;}
+  .brand-name{font-weight:700; font-size:15px; color:#fff; line-height:1.2;}
+  .brand-sub{font-size:10.5px; color:var(--sidebar-text-dim); letter-spacing:.04em;}
+  .nav{flex:1; overflow-y:auto; padding:6px 10px;}
+  .nav-item{display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:9px; font-size:13.5px; color:var(--sidebar-text); cursor:pointer; margin-bottom:2px; border:1px solid transparent; transition:background .12s;}
+  .nav-item:hover{background:rgba(255,255,255,0.06);}
+  .nav-item.active{background:var(--bg-sidebar-active); color:#fff; border-color:rgba(255,255,255,0.08);}
+  .nav-item.active .nav-dot{background:var(--accent);}
+  .nav-dot{width:6px; height:6px; border-radius:50%; background:var(--sidebar-text-dim); flex:none;}
+  .nav-section-label{font-size:10px; letter-spacing:.08em; color:var(--sidebar-text-dim); padding:14px 12px 4px; text-transform:uppercase;}
+  .sidebar-foot{padding:12px 14px 16px; border-top:1px solid rgba(255,255,255,0.07); font-size:11.5px; color:var(--sidebar-text-dim);}
+  .role-pill{display:inline-flex; align-items:center; gap:6px; background:rgba(255,255,255,0.06); color:#fff; padding:5px 10px; border-radius:999px; font-size:11.5px; margin-bottom:8px;}
+
+  .main{flex:1; min-width:0; display:flex; flex-direction:column;}
+  .topbar{position:sticky; top:0; z-index:15; background:var(--bg-page); border-bottom:1px solid var(--border); padding:14px 22px 12px;}
+  .page-title{font-size:20px; font-weight:700; letter-spacing:.01em;}
+  .page-sub{font-size:12.5px; color:var(--text-muted); margin-top:2px;}
+  .content{padding:18px 22px 60px; flex:1; min-width:0;}
+
+  .filter-bar{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; align-items:center;}
+  .field{display:flex; flex-direction:column; gap:3px;}
+  .field label{font-size:10.5px; color:var(--text-muted); letter-spacing:.03em;}
+  select, input[type=text], input[type=number], input[type=search]{
+    background:var(--bg-surface); color:var(--text-primary); border:1px solid var(--border-strong);
+    border-radius:8px; padding:6px 9px; font-size:12.5px; font-family:inherit;
+  }
+  select:focus, input:focus{outline:2px solid var(--accent); outline-offset:1px;}
+  .btn{
+    background:var(--bg-surface); color:var(--text-primary); border:1px solid var(--border-strong); border-radius:8px;
+    padding:7px 13px; font-size:12.5px; cursor:pointer; font-weight:500; display:inline-flex; align-items:center; gap:6px;
+  }
+  .btn:hover{border-color:var(--accent);}
+  .btn-primary{background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:700;}
+  .btn-ghost{background:transparent; border-color:transparent; color:var(--text-secondary);}
+  .btn-sm{padding:4px 9px; font-size:11.5px;}
+  .btn:disabled{opacity:.45; cursor:not-allowed;}
+
+  .grid{display:grid; gap:14px;}
+  .grid-kpi{grid-template-columns:repeat(auto-fit,minmax(190px,1fr));}
+  .grid-2{grid-template-columns:repeat(2,1fr);}
+  .grid-3{grid-template-columns:repeat(3,1fr);}
+  @media (max-width:1100px){.grid-2,.grid-3{grid-template-columns:1fr;}}
+
+  .card{background:var(--bg-surface); border:1px solid var(--border); border-radius:14px; padding:16px 18px; box-shadow:var(--shadow);}
+  .card-title{font-size:13.5px; font-weight:700; display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px;}
+  .card-title .hint{font-size:11px; color:var(--text-muted); font-weight:400;}
+
+  .kpi-card{display:flex; flex-direction:column; gap:6px;}
+  .kpi-label{font-size:12px; color:var(--text-muted); font-weight:500;}
+  .kpi-value{font-size:26px; font-weight:700; line-height:1.1;}
+  .kpi-value .unit{font-size:13px; color:var(--text-muted); font-weight:500; margin-left:3px;}
+  .kpi-delta{font-size:11.5px; display:flex; align-items:center; gap:5px; font-weight:600;}
+  .kpi-delta.up{color:var(--good);}
+  .kpi-delta.down{color:var(--critical);}
+  .kpi-delta.flat{color:var(--text-muted);}
+  .kpi-prev{font-size:10.5px; color:var(--text-muted);}
+
+  .badge{display:inline-flex; align-items:center; gap:5px; padding:2px 9px; border-radius:999px; font-size:11px; font-weight:600; white-space:nowrap;}
+  .dot{width:8px; height:8px; border-radius:50%; flex:none;}
+  .dot.good, .badge.good{color:var(--good);} .dot.good{background:var(--good);}
+  .dot.warn, .badge.warn{color:var(--warning);} .dot.warn{background:var(--warning);}
+  .dot.critical, .badge.critical{color:var(--critical);} .dot.critical{background:var(--critical);}
+  .dot.gray, .badge.gray{color:var(--gray);} .dot.gray{background:var(--gray);}
+  .badge.good{background:rgba(12,163,12,0.12);}
+  .badge.warn{background:rgba(201,133,0,0.12);}
+  .badge.critical{background:rgba(208,59,59,0.12);}
+  .badge.gray{background:rgba(154,160,180,0.12);}
+  .badge.accent{background:var(--accent-soft); color:var(--accent);}
+  .badge.neutral{background:var(--bg-surface-2); color:var(--text-secondary);}
+
+  .table-wrap{overflow:auto; border:1px solid var(--border); border-radius:12px; max-height:640px;}
+  table{border-collapse:collapse; width:100%; font-size:12.5px; min-width:900px;}
+  thead th{position:sticky; top:0; z-index:3; background:var(--bg-surface-2); text-align:left; padding:9px 10px; font-weight:700; white-space:nowrap; border-bottom:1px solid var(--border-strong); cursor:pointer; user-select:none;}
+  thead th:hover{color:var(--accent);}
+  tbody td{padding:8px 10px; border-bottom:1px solid var(--border); white-space:nowrap;}
+  tbody tr:hover{background:var(--bg-surface-2);}
+  tbody tr{cursor:pointer;}
+  table td:nth-child(1), table th:nth-child(1){position:sticky; left:0; z-index:2; background:var(--bg-surface); width:96px; min-width:96px;}
+  table thead th:nth-child(1){z-index:4; background:var(--bg-surface-2);}
+  table td:nth-child(2), table th:nth-child(2){position:sticky; left:96px; z-index:2; background:var(--bg-surface); width:96px; min-width:96px; border-right:1px solid var(--border-strong);}
+  table thead th:nth-child(2){z-index:4; background:var(--bg-surface-2);}
+  .sort-arrow{opacity:.55; font-size:10px; margin-left:3px;}
+  .num-cell{font-family:'Oswald','Noto Sans TC',sans-serif; font-variant-numeric:tabular-nums; text-align:right;}
+
+  .tabs{display:flex; gap:4px; border-bottom:1px solid var(--border); margin-bottom:14px; flex-wrap:wrap;}
+  .tab{padding:8px 14px; font-size:12.5px; font-weight:600; color:var(--text-muted); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px;}
+  .tab.active{color:var(--accent); border-bottom-color:var(--accent);}
+
+  .modal-overlay{position:fixed; inset:0; background:rgba(6,8,14,0.55); display:flex; align-items:center; justify-content:center; z-index:100; padding:20px;}
+  .modal{background:var(--bg-surface); border-radius:14px; max-width:640px; width:100%; max-height:82vh; overflow:auto; padding:20px; box-shadow:var(--shadow);}
+
+  .flag-list{display:flex; flex-direction:column; gap:8px;}
+  .flag-row{display:flex; align-items:flex-start; gap:8px; font-size:12.5px; padding:8px 10px; border-radius:9px; background:var(--bg-surface-2);}
+
+  a{color:var(--accent);}
+  .link{color:var(--accent); cursor:pointer; font-weight:600;}
+  .muted{color:var(--text-muted);}
+  .divider{height:1px; background:var(--border); margin:14px 0;}
+  .stat-row{display:flex; justify-content:space-between; font-size:12.5px; padding:6px 0; border-bottom:1px dashed var(--border);}
+  .stat-row:last-child{border-bottom:none;}
+  .pill-group{display:flex; flex-wrap:wrap; gap:6px;}
+  .toggle-pill{padding:5px 11px; border-radius:999px; border:1px solid var(--border-strong); font-size:11.5px; cursor:pointer; color:var(--text-secondary); background:var(--bg-surface);}
+  .toggle-pill.active{background:var(--accent); color:var(--accent-ink); border-color:var(--accent);}
+  textarea.export-box{width:100%; height:220px; font-family:monospace; font-size:11px; border-radius:8px; border:1px solid var(--border-strong); background:var(--bg-surface-2); color:var(--text-primary); padding:8px;}
+  .drop-zone{border:2px dashed var(--border-strong); border-radius:12px; padding:32px; text-align:center; color:var(--text-muted); cursor:pointer;}
+  .drop-zone:hover{border-color:var(--accent); color:var(--accent);}
+  .foot-note{font-size:11px; color:var(--text-muted); line-height:1.6;}
+  .empty-state{padding:40px 20px; text-align:center; color:var(--text-muted); font-size:13px;}
+
+  @media (max-width:860px){
+    .app-shell{flex-direction:column;}
+    .sidebar{width:100%; flex:none; height:auto; position:relative; flex-direction:row; overflow-x:auto;}
+    .brand{flex:none;}
+    .nav{display:flex; padding:8px; overflow-x:auto;}
+    .nav-section-label{display:none;}
+    .nav-item{white-space:nowrap;}
+    .sidebar-foot{display:none;}
+    table{min-width:760px;}
+  }
+</style>
+
+<div id="root"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
+<script src="data.js"></script>
+
+<script type="text/babel">
+const { useState, useMemo, useEffect, useRef, useCallback } = React;
+const DATA = window.DASHBOARD_DATA;
+
+/* ---------------- constants ---------------- */
+const MONTHS = DATA.meta.months;
+const MONTH_LABELS = DATA.meta.monthLabels;
+const TECHS = DATA.techs;
+const PLANTS = DATA.plants.filter(p => p.techCount > 0);
+const PLANT_NAMES = PLANTS.map(p => p.name);
+const OVERALL = DATA.overall;
+
+const TENURE_BUCKETS = [
+  { key: 'lt1', label: '未滿1年', test: t => t < 1 },
+  { key: '1-3', label: '1–3年', test: t => t >= 1 && t < 3 },
+  { key: '3-5', label: '3–5年', test: t => t >= 3 && t < 5 },
+  { key: '5-10', label: '5–10年', test: t => t >= 5 && t < 10 },
+  { key: '10-15', label: '10–15年', test: t => t >= 10 && t < 15 },
+  { key: '15+', label: '15年以上', test: t => t >= 15 },
+];
+const tenureBucketOf = t => (TENURE_BUCKETS.find(b => b.test(t)) || {}).key;
+
+const MILEAGE_BUCKETS = [
+  { key: 'm0_1', label: '0–1萬公里' },
+  { key: 'm1_3', label: '1–3萬公里' },
+  { key: 'm3_5', label: '3–5萬公里' },
+  { key: 'm5_10', label: '5–10萬公里' },
+  { key: 'm10up', label: '10萬公里以上' },
+];
+const MILEAGE_MID = { m0_1: 5000, m1_3: 20000, m3_5: 40000, m5_10: 75000, m10up: 130000 };
+
+const TYPE_OPTIONS = ['核心戰力', '高產能', '高產值', '需改善', '觀察期'];
+const QUAL_OPTIONS = ['正式戰力', '觀察期'];
+
+const DEFAULT_THRESHOLDS = {
+  revGapPct: 10, laborLow: 0.24, laborHigh: 0.32,
+  warrantyGapPct: 20, compositeGreen: 100, compositeWarn: 90,
+  seniorYears: 10, newHireYears: 1,
+};
+
+/* ---------------- format helpers ---------------- */
+const fmtInt = v => (v == null || isNaN(v)) ? '—' : Math.round(v).toLocaleString('zh-Hant-TW');
+const fmtMoney = v => (v == null || isNaN(v)) ? '—' : 'NT$' + Math.round(v).toLocaleString('zh-Hant-TW');
+const fmtPct = (v, d) => (v == null || isNaN(v)) ? '—' : (v * 100).toFixed(d == null ? 1 : d) + '%';
+const fmtNum = (v, d) => (v == null || isNaN(v)) ? '—' : v.toFixed(d == null ? 1 : d);
+const fmtKm = v => (v == null || isNaN(v)) ? '—' : Math.round(v).toLocaleString('zh-Hant-TW') + ' km';
+
+/* ---------------- data access helpers ---------------- */
+function techKey(t) { return t.plant + '|' + t.name; }
+function techMonthly(t, m) { return t.monthly && t.monthly[String(m)]; }
+
+function sumField(t, field, from, to) {
+  let s = 0, any = false;
+  for (let m = from; m <= to; m++) {
+    const r = techMonthly(t, m);
+    if (r && typeof r[field] === 'number') { s += r[field]; any = true; }
+  }
+  return any ? s : null;
+}
+function techTotalIntake(t, from, to) { return sumField(t, 'total_count', from, to) || 0; }
+function techTotalRevenue(t, from, to) {
+  let s = 0, any = false;
+  for (let m = from; m <= to; m++) {
+    const r = techMonthly(t, m);
+    if (r && typeof r.total_count === 'number' && typeof r.rev_per_unit === 'number') { s += r.total_count * r.rev_per_unit; any = true; }
+  }
+  return any ? s : 0;
+}
+function techAvgRevPerUnit(t, from, to) {
+  const intake = techTotalIntake(t, from, to), rev = techTotalRevenue(t, from, to);
+  return intake > 0 ? rev / intake : null;
+}
+function techWeighted(t, field, from, to) {
+  let num = 0, den = 0;
+  for (let m = from; m <= to; m++) {
+    const r = techMonthly(t, m);
+    if (r && typeof r.total_count === 'number' && typeof r[field] === 'number') { num += r[field] * r.total_count; den += r.total_count; }
+  }
+  return den > 0 ? num / den : null;
+}
+function techMileageSums(t, from, to) {
+  const out = { m0_1: 0, m1_3: 0, m3_5: 0, m5_10: 0, m10up: 0 };
+  for (let m = from; m <= to; m++) {
+    const r = techMonthly(t, m);
+    if (!r) continue;
+    MILEAGE_BUCKETS.forEach(b => { if (typeof r[b.key] === 'number') out[b.key] += r[b.key]; });
+  }
+  return out;
+}
+function techAvgMileage(t, from, to) {
+  const sums = techMileageSums(t, from, to);
+  let total = 0, weighted = 0;
+  Object.keys(sums).forEach(k => { total += sums[k]; weighted += sums[k] * MILEAGE_MID[k]; });
+  return total > 0 ? weighted / total : null;
+}
+function availableMonths(t) {
+  return MONTHS.filter(m => { const r = techMonthly(t, m); return r && typeof r.total_count === 'number'; });
+}
+
+/* ---------------- RAG logic ---------------- */
+function ragComposite(idx, th) {
+  if (idx == null || isNaN(idx)) return 'gray';
+  if (idx >= th.compositeGreen) return 'good';
+  if (idx >= th.compositeWarn) return 'warn';
+  return 'critical';
+}
+function ragRevGap(techRev, plantRev, th) {
+  if (techRev == null || !plantRev) return 'gray';
+  const gapPct = (plantRev - techRev) / plantRev * 100;
+  if (gapPct >= th.revGapPct) return 'critical';
+  if (gapPct >= th.revGapPct / 2) return 'warn';
+  return 'good';
+}
+function ragLabor(ratio, th) {
+  if (ratio == null) return 'gray';
+  if (ratio >= th.laborLow && ratio <= th.laborHigh) return 'good';
+  const buf = 0.02;
+  if (ratio >= th.laborLow - buf && ratio <= th.laborHigh + buf) return 'warn';
+  return 'critical';
+}
+function ragWarranty(techR, plantR, th) {
+  if (techR == null || !plantR) return 'gray';
+  const rel = (techR - plantR) / plantR * 100;
+  if (rel >= th.warrantyGapPct) return 'critical';
+  if (rel >= th.warrantyGapPct / 2) return 'warn';
+  return 'good';
+}
+const SEV_RANK = { critical: 3, warn: 2, good: 1, gray: 0 };
+function worstOf(...tags) {
+  const real = tags.filter(t => t !== 'gray');
+  if (!real.length) return 'gray';
+  return real.reduce((a, b) => SEV_RANK[b] > SEV_RANK[a] ? b : a, real[0]);
+}
+function hasEnoughSample(t) { return t.effectiveMonths == null || t.effectiveMonths >= 2; }
+
+function techOverallRag(t, th) {
+  if (!hasEnoughSample(t)) return 'gray';
+  return worstOf(
+    ragComposite(t.compositeIndex, th),
+    ragRevGap(t.weightedRevPerUnit, t.plantAvgRevPerUnit, th),
+    ragLabor(t.avgLaborRatio, th),
+    ragWarranty(t.warrantyRatio, t.plantAvgWarrantyRatio, th)
+  );
+}
+
+function decliningStreak(t, field, minLen) {
+  const ms = availableMonths(t);
+  if (ms.length < minLen + 1) return false;
+  const last = ms.slice(-(minLen + 1));
+  const vals = last.map(m => techMonthly(t, m)[field]);
+  for (let i = 1; i < vals.length; i++) if (!(vals[i] < vals[i - 1])) return false;
+  return true;
+}
+
+function techAlerts(t, th) {
+  const flags = [];
+  if (!hasEnoughSample(t)) {
+    flags.push({ sev: 'gray', label: '有效上線月數不足（' + (t.effectiveMonths == null ? 0 : t.effectiveMonths) + ' 個月），資料樣本不足以判定戰力' });
+    return flags;
+  }
+  const rc = ragComposite(t.compositeIndex, th);
+  if (rc === 'critical') flags.push({ sev: 'critical', label: '綜合戰力指數低於警戒值 (' + fmtNum(t.compositeIndex, 1) + ')' });
+  const rv = ragRevGap(t.weightedRevPerUnit, t.plantAvgRevPerUnit, th);
+  if (rv !== 'good' && rv !== 'gray') flags.push({ sev: rv, label: '單台營收低於同廠平均 ' + fmtPct((t.plantAvgRevPerUnit - t.weightedRevPerUnit) / t.plantAvgRevPerUnit, 1) });
+  const rl = ragLabor(t.avgLaborRatio, th);
+  if (rl !== 'good' && rl !== 'gray') flags.push({ sev: rl, label: '工資營收占比偏離合理區間 (' + fmtPct(t.avgLaborRatio, 1) + ')' });
+  const rw = ragWarranty(t.warrantyRatio, t.plantAvgWarrantyRatio, th);
+  if (rw !== 'good' && rw !== 'gray') flags.push({ sev: rw, label: '保固車占比明顯高於同廠平均 (' + fmtPct(t.warrantyRatio, 1) + ' vs ' + fmtPct(t.plantAvgWarrantyRatio, 1) + ')' });
+  if (decliningStreak(t, 'total_count', 2)) flags.push({ sev: 'warn', label: '接車台數連續2個月下滑' });
+  if (decliningStreak(t, 'rev_per_unit', 2)) flags.push({ sev: 'warn', label: '單台營收連續2個月下滑' });
+  if (t.tenure >= th.seniorYears && t.compositeIndex != null && t.compositeIndex < th.compositeWarn) {
+    flags.push({ sev: 'critical', label: '高年資（' + fmtNum(t.tenure, 1) + '年）但綜合戰力低於同年資水準' });
+  }
+  if (t.tenure < th.newHireYears && t.compositeIndex != null && t.compositeIndex < th.compositeWarn) {
+    flags.push({ sev: 'warn', label: '新進技師績效成長速度低於預期' });
+  }
+  if (availableMonths(t).length < 3) flags.push({ sev: 'gray', label: '有效上線月數不足，資料樣本偏少' });
+  return flags;
+}
+
+/* ---------------- misc utils ---------------- */
+function median(arr) { const a = [...arr].sort((x, y) => x - y); const n = a.length; if (!n) return null; return n % 2 ? a[(n - 1) / 2] : (a[n / 2 - 1] + a[n / 2]) / 2; }
+function mean(arr) { const v = arr.filter(x => x != null && !isNaN(x)); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; }
+function loadLS(key, fallback) { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch (e) { return fallback; } }
+function saveLS(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {} }
+function copyToClipboard(text) {
+  try { navigator.clipboard.writeText(text); return true; } catch (e) {}
+  try {
+    const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); return true;
+  } catch (e) { return false; }
+}
+function rowsToTSV(headers, rows) {
+  const esc = v => String(v == null ? '' : v).replace(/\t|\n/g, ' ');
+  return [headers.join('\t')].concat(rows.map(r => r.map(esc).join('\t'))).join('\n');
+}
+
+/* ---------------- theme-aware chart colors ---------------- */
+function useThemeTick() {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const h = () => setTick(t => t + 1);
+    try { mq.addEventListener('change', h); } catch (e) { mq.addListener(h); }
+    return () => { try { mq.removeEventListener('change', h); } catch (e) { mq.removeListener(h); } };
+  }, []);
+  return tick;
+}
+function getCssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function chartTheme() {
+  return {
+    text: getCssVar('--text-secondary') || '#4c5164',
+    muted: getCssVar('--text-muted') || '#868b9e',
+    grid: getCssVar('--border') || 'rgba(0,0,0,0.08)',
+    accent: getCssVar('--accent') || '#c3002f',
+    good: getCssVar('--good') || '#0ca30c',
+    warning: getCssVar('--warning') || '#c98500',
+    critical: getCssVar('--critical') || '#d03b3b',
+    series: [getCssVar('--series-1'), getCssVar('--series-2'), getCssVar('--series-3'), getCssVar('--series-4'), getCssVar('--series-5')],
+  };
+}
+Chart.defaults.font.family = "'Noto Sans TC','Segoe UI',sans-serif";
+Chart.defaults.font.size = 11.5;
+
+function ChartCanvas({ type, data, options, height }) {
+  const ref = useRef(null);
+  const chartRef = useRef(null);
+  const tick = useThemeTick();
+  const dataStr = JSON.stringify(data);
+  const optStr = JSON.stringify(options || {});
+  useEffect(() => {
+    if (chartRef.current) chartRef.current.destroy();
+    const th = chartTheme();
+    const baseOpt = {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: (data.datasets || []).length > 1, labels: { color: th.text, boxWidth: 12, usePointStyle: true, pointStyle: 'circle' } },
+        tooltip: { backgroundColor: getCssVar('--bg-surface') || '#fff', titleColor: th.text, bodyColor: th.text, borderColor: th.grid, borderWidth: 1, padding: 10, boxPadding: 4 },
+      },
+      scales: (type === 'doughnut' || type === 'radar') ? {} : {
+        x: { ticks: { color: th.muted }, grid: { color: 'transparent' } },
+        y: { ticks: { color: th.muted }, grid: { color: th.grid }, beginAtZero: true },
+      },
+    };
+    const merged = Object.assign({}, baseOpt, options || {});
+    chartRef.current = new Chart(ref.current.getContext('2d'), { type, data, options: merged });
+    return () => { if (chartRef.current) chartRef.current.destroy(); };
+  }, [type, dataStr, optStr, tick]);
+  return React.createElement('div', { style: { position: 'relative', height: height || 280, width: '100%' } }, React.createElement('canvas', { ref }));
+}
+
+/* ---------------- small UI atoms ---------------- */
+function RagBadge({ rag, label }) {
+  const labels = { good: '達標', warn: '接近門檻', critical: '異常', gray: '無資料' };
+  return React.createElement('span', { className: 'badge ' + rag }, React.createElement('span', { className: 'dot ' + rag }), label || labels[rag]);
+}
+function Kpi({ label, value, unit, prevValue, deltaPct, higherIsBetter, formatter }) {
+  const f = formatter || (v => v);
+  let dir = 'flat', arrow = '－';
+  if (deltaPct != null && !isNaN(deltaPct) && Math.abs(deltaPct) > 0.05) {
+    const positive = deltaPct > 0;
+    const good = higherIsBetter === false ? !positive : positive;
+    dir = good ? 'up' : 'down';
+    arrow = positive ? '▲' : '▼';
+  }
+  return React.createElement('div', { className: 'card kpi-card' },
+    React.createElement('div', { className: 'kpi-label' }, label),
+    React.createElement('div', { className: 'kpi-value num' }, f(value), unit ? React.createElement('span', { className: 'unit' }, unit) : null),
+    prevValue !== undefined ? React.createElement('div', { className: 'kpi-delta ' + dir },
+      arrow + ' ' + (deltaPct == null || isNaN(deltaPct) ? '—' : Math.abs(deltaPct * 100).toFixed(1) + '%'),
+      React.createElement('span', { className: 'kpi-prev' }, '上期 ' + f(prevValue))
+    ) : null
+  );
+}
+function Select({ value, onChange, options, style }) {
+  return React.createElement('select', { value, onChange: e => onChange(e.target.value), style },
+    options.map(o => React.createElement('option', { key: o.value, value: o.value }, o.label))
+  );
+}
+function Modal({ title, onClose, children, wide }) {
+  return React.createElement('div', { className: 'modal-overlay', onClick: onClose },
+    React.createElement('div', { className: 'modal', style: wide ? { maxWidth: 880 } : {}, onClick: e => e.stopPropagation() },
+      React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 } },
+        React.createElement('h3', null, title),
+        React.createElement('button', { className: 'btn btn-ghost btn-sm', onClick: onClose }, '✕ 關閉')
+      ),
+      children
+    )
+  );
+}
+function ExportModal({ title, headers, rows, onClose }) {
+  const text = useMemo(() => rowsToTSV(headers, rows), [headers, rows]);
+  const [copied, setCopied] = useState(false);
+  return React.createElement(Modal, { title: title || '匯出資料', onClose, wide: true },
+    React.createElement('p', { className: 'foot-note' }, '瀏覽器安全限制無法直接下載檔案，請複製下方內容後貼到 Excel 另存為 .csv／.xlsx。'),
+    React.createElement('textarea', { className: 'export-box', readOnly: true, value: text }),
+    React.createElement('div', { style: { marginTop: 10, display: 'flex', gap: 8 } },
+      React.createElement('button', { className: 'btn btn-primary', onClick: () => { copyToClipboard(text); setCopied(true); setTimeout(() => setCopied(false), 1500); } }, copied ? '已複製 ✓' : '複製到剪貼簿')
+    )
+  );
+}
+
+/* ---------------- global filter context ---------------- */
+function defaultFilters() {
+  return { plant: 'all', tenure: 'all', qualification: 'all', type: 'all', search: '', from: 1, to: 8, kpiMonth: 8 };
+}
+
+function applyRoleScope(filters, role) {
+  const f = Object.assign({}, filters);
+  if (role.role === 'plantHead') f.plant = role.plant;
+  return f;
+}
+
+function filterTechs(techs, f, skipDims) {
+  return techs.filter(t => {
+    if (skipDims) return !(f.search && !t.name.includes(f.search) && !t.plant.includes(f.search));
+    if (f.plant !== 'all' && t.plant !== f.plant) return false;
+    if (f.tenure !== 'all' && tenureBucketOf(t.tenure) !== f.tenure) return false;
+    if (f.qualification !== 'all' && t.qualification !== f.qualification) return false;
+    if (f.type !== 'all' && t.type !== f.type) return false;
+    if (f.search && !t.name.includes(f.search) && !t.plant.includes(f.search)) return false;
+    return true;
+  });
+}
+
+/* ---------------- aggregate KPI builder ---------------- */
+function aggregateForPeriod(techs, month) {
+  const from = month, to = month;
+  let intake = 0, revenue = 0, laborNum = 0, laborDen = 0, warrantyNum = 0, warrantyDen = 0, mileageNum = 0, mileageDen = 0;
+  techs.forEach(t => {
+    const r = techMonthly(t, month);
+    if (!r || typeof r.total_count !== 'number') return;
+    intake += r.total_count;
+    if (typeof r.rev_per_unit === 'number') revenue += r.total_count * r.rev_per_unit;
+    if (typeof r.labor_ratio === 'number') { laborNum += r.labor_ratio * r.total_count; laborDen += r.total_count; }
+    if (typeof r.warranty_ratio === 'number') { warrantyNum += r.warranty_ratio * r.total_count; warrantyDen += r.total_count; }
+    MILEAGE_BUCKETS.forEach(b => { if (typeof r[b.key] === 'number') { mileageNum += r[b.key] * MILEAGE_MID[b.key]; mileageDen += r[b.key]; } });
+  });
+  return {
+    techCount: techs.length, intake, revenue,
+    avgRevPerUnit: intake > 0 ? revenue / intake : null,
+    avgLaborRatio: laborDen > 0 ? laborNum / laborDen : null,
+    avgWarrantyRatio: warrantyDen > 0 ? warrantyNum / warrantyDen : null,
+    avgMileage: mileageDen > 0 ? mileageNum / mileageDen : null,
+  };
+}
+function deltaPct(cur, prev) { if (cur == null || prev == null || prev === 0) return null; return (cur - prev) / Math.abs(prev); }
+
+/* ================= App ================= */
+const NAV = [
+  { key: 'overview', label: '綜合總覽', section: '分析' },
+  { key: 'plants', label: '各廠績效', section: '分析', roles: ['manager', 'plantHead'] },
+  { key: 'roster', label: '技師績效總表', section: '分析', roles: ['manager', 'plantHead'] },
+  { key: 'techDetail', label: '技師個人分析', section: '分析' },
+  { key: 'tenure', label: '年資分析', section: '分析', roles: ['manager', 'plantHead'] },
+  { key: 'mileage', label: '維修里程分析', section: '分析', roles: ['manager', 'plantHead'] },
+  { key: 'revenue', label: '營收結構分析', section: '分析', roles: ['manager', 'plantHead'] },
+  { key: 'trend', label: '績效推移', section: '分析' },
+  { key: 'ranking', label: '排名與異常', section: '分析', roles: ['manager', 'plantHead'] },
+  { key: 'import', label: '資料匯入', section: '管理', roles: ['manager'] },
+  { key: 'settings', label: '指標與門檻設定', section: '管理', roles: ['manager'] },
+  { key: 'roles', label: '使用者權限管理', section: '管理' },
+];
+
+function App() {
+  const [page, setPage] = useState('overview');
+  const [selectedTechKey, setSelectedTechKey] = useState(null);
+  const [role, setRole] = useState(() => loadLS('techdash_role', { role: 'manager', plant: PLANT_NAMES[0], techKey: techKey(TECHS[0]) }));
+  const [thresholds, setThresholds] = useState(() => loadLS('techdash_thresholds', DEFAULT_THRESHOLDS));
+  const [filters, setFilters] = useState(defaultFilters());
+
+  useEffect(() => saveLS('techdash_role', role), [role]);
+  useEffect(() => saveLS('techdash_thresholds', thresholds), [thresholds]);
+
+  useEffect(() => {
+    if (role.role === 'tech') { setSelectedTechKey(role.techKey); setPage(p => (['overview', 'techDetail', 'trend', 'roles'].includes(p) ? p : 'overview')); }
+  }, [role.role, role.techKey]);
+
+  const scopedFilters = useMemo(() => applyRoleScope(filters, role), [filters, role]);
+  const visibleTechs = useMemo(() => {
+    if (role.role === 'tech') return TECHS.filter(t => techKey(t) === role.techKey);
+    return TECHS;
+  }, [role]);
+  const filteredTechs = useMemo(() => filterTechs(visibleTechs, scopedFilters, role.role === 'tech'), [visibleTechs, scopedFilters, role.role]);
+
+  const navItems = NAV.filter(n => !n.roles || n.roles.includes(role.role));
+
+  function goTech(k) { setSelectedTechKey(k); setPage('techDetail'); }
+
+  let pageEl = null;
+  const common = { filters: scopedFilters, setFilters, filteredTechs, thresholds, role, goTech };
+  if (page === 'overview') pageEl = React.createElement(OverviewPage, common);
+  else if (page === 'plants') pageEl = React.createElement(PlantsPage, Object.assign({}, common, { onOpenPlant: p => setFilters(f => Object.assign({}, f, { plant: p })) }));
+  else if (page === 'roster') pageEl = React.createElement(RosterPage, common);
+  else if (page === 'techDetail') pageEl = React.createElement(TechDetailPage, Object.assign({}, common, { techKey: selectedTechKey, setTechKey: setSelectedTechKey }));
+  else if (page === 'tenure') pageEl = React.createElement(TenurePage, common);
+  else if (page === 'mileage') pageEl = React.createElement(MileagePage, common);
+  else if (page === 'revenue') pageEl = React.createElement(RevenuePage, common);
+  else if (page === 'trend') pageEl = React.createElement(TrendPage, common);
+  else if (page === 'ranking') pageEl = React.createElement(RankingPage, common);
+  else if (page === 'import') pageEl = React.createElement(ImportPage, common);
+  else if (page === 'settings') pageEl = React.createElement(SettingsPage, { thresholds, setThresholds });
+  else if (page === 'roles') pageEl = React.createElement(RolesPage, { role, setRole });
+
+  const titleMap = Object.fromEntries(NAV.map(n => [n.key, n.label]));
+  const roleLabel = { manager: '服務部主管', plantHead: '廠長／技師長', tech: '技師' }[role.role];
+
+  return React.createElement('div', { className: 'app-shell' },
+    React.createElement('div', { className: 'sidebar' },
+      React.createElement('div', { className: 'brand' },
+        React.createElement('div', { className: 'brand-mark' }, '戰'),
+        React.createElement('div', null,
+          React.createElement('div', { className: 'brand-name' }, '戰力雷達'),
+          React.createElement('div', { className: 'brand-sub' }, 'TECH PERFORMANCE RADAR')
+        )
+      ),
+      React.createElement('div', { className: 'nav' },
+        ['分析', '管理'].map(sec => {
+          const items = navItems.filter(n => n.section === sec);
+          if (!items.length) return null;
+          return React.createElement(React.Fragment, { key: sec },
+            React.createElement('div', { className: 'nav-section-label' }, sec),
+            items.map(n => React.createElement('div', {
+              key: n.key, className: 'nav-item' + (page === n.key ? ' active' : ''),
+              onClick: () => setPage(n.key)
+            }, React.createElement('span', { className: 'nav-dot' }), n.label))
+          );
+        })
+      ),
+      React.createElement('div', { className: 'sidebar-foot' },
+        React.createElement('div', { className: 'role-pill' }, '👤 ' + roleLabel + (role.role === 'plantHead' ? ' · ' + role.plant : '')),
+        React.createElement('div', null, '資料截至 ' + DATA.meta.updatedThrough)
+      )
+    ),
+    React.createElement('div', { className: 'main' },
+      React.createElement('div', { className: 'topbar' },
+        React.createElement('div', { className: 'page-title' }, titleMap[page]),
+        React.createElement('div', { className: 'page-sub' }, '2026年 各廠技師戰力分析｜同廠正式戰力平均基準 = 100｜資料含 ' + PLANTS.length + ' 廠、' + OVERALL['總技師數'] + ' 位技師｜1–8月完整月份（9月資料僅至9/15，暫不納入）'),
+        (page !== 'settings' && page !== 'roles' && page !== 'import') ? React.createElement(GlobalFilterBar, { filters, setFilters, role }) : null
+      ),
+      React.createElement('div', { className: 'content' }, pageEl)
+    )
+  );
+}
+
+function GlobalFilterBar({ filters, setFilters, role }) {
+  const set = (k, v) => setFilters(f => Object.assign({}, f, { [k]: v }));
+  const isTech = role.role === 'tech';
+  return React.createElement('div', { className: 'filter-bar' },
+    !isTech ? React.createElement('div', { className: 'field' }, React.createElement('label', null, '服務廠'),
+      React.createElement(Select, {
+        value: filters.plant, onChange: v => set('plant', v), style: role.role === 'plantHead' ? { opacity: .6, pointerEvents: 'none' } : {},
+        options: [{ value: 'all', label: '全部服務廠' }].concat(PLANT_NAMES.map(p => ({ value: p, label: p })))
+      })
+    ) : null,
+    !isTech ? React.createElement('div', { className: 'field' }, React.createElement('label', null, '年資區間'),
+      React.createElement(Select, { value: filters.tenure, onChange: v => set('tenure', v), options: [{ value: 'all', label: '全部年資' }].concat(TENURE_BUCKETS.map(b => ({ value: b.key, label: b.label }))) })
+    ) : null,
+    !isTech ? React.createElement('div', { className: 'field' }, React.createElement('label', null, '戰力資格'),
+      React.createElement(Select, { value: filters.qualification, onChange: v => set('qualification', v), options: [{ value: 'all', label: '全部' }].concat(QUAL_OPTIONS.map(q => ({ value: q, label: q }))) })
+    ) : null,
+    !isTech ? React.createElement('div', { className: 'field' }, React.createElement('label', null, '戰力類型'),
+      React.createElement(Select, { value: filters.type, onChange: v => set('type', v), options: [{ value: 'all', label: '全部' }].concat(TYPE_OPTIONS.map(q => ({ value: q, label: q }))) })
+    ) : null,
+    React.createElement('div', { className: 'field' }, React.createElement('label', null, '分析區間（月）'),
+      React.createElement('div', { style: { display: 'flex', gap: 4, alignItems: 'center' } },
+        React.createElement(Select, { value: String(filters.from), onChange: v => set('from', Math.min(+v, filters.to)), options: MONTHS.map(m => ({ value: String(m), label: MONTH_LABELS[m - 1] })) }),
+        React.createElement('span', { className: 'muted' }, '至'),
+        React.createElement(Select, { value: String(filters.to), onChange: v => set('to', Math.max(+v, filters.from)), options: MONTHS.map(m => ({ value: String(m), label: MONTH_LABELS[m - 1] })) })
+      )
+    ),
+    React.createElement('div', { className: 'field' }, React.createElement('label', null, '本期比較月份'),
+      React.createElement(Select, { value: String(filters.kpiMonth), onChange: v => set('kpiMonth', +v), options: MONTHS.filter(m => m >= 2).map(m => ({ value: String(m), label: MONTH_LABELS[m - 1] })) })
+    ),
+    role.role !== 'tech' ? React.createElement('div', { className: 'field' }, React.createElement('label', null, '搜尋技師／服務廠'),
+      React.createElement('input', { type: 'search', placeholder: '輸入姓名或廠別…', value: filters.search, onChange: e => set('search', e.target.value), style: { width: 150 } })
+    ) : null,
+    React.createElement('button', { className: 'btn btn-ghost btn-sm', onClick: () => setFilters(f => Object.assign(defaultFilters(), { plant: role.role === 'plantHead' ? f.plant : 'all' })) }, '重設篩選')
+  );
+}
+
+/* ---------------- Overview ---------------- */
+function OverviewPage({ filteredTechs, filters, thresholds, goTech }) {
+  const cur = useMemo(() => aggregateForPeriod(filteredTechs, filters.kpiMonth), [filteredTechs, filters.kpiMonth]);
+  const prev = useMemo(() => aggregateForPeriod(filteredTechs, filters.kpiMonth - 1), [filteredTechs, filters.kpiMonth]);
+  const cumulative = useMemo(() => {
+    let intake = 0, revenue = 0;
+    filteredTechs.forEach(t => { intake += techTotalIntake(t, filters.from, filters.to); revenue += techTotalRevenue(t, filters.from, filters.to); });
+    return { intake, revenue };
+  }, [filteredTechs, filters.from, filters.to]);
+
+  const counts = useMemo(() => {
+    const c = { qual: {}, type: {} };
+    filteredTechs.forEach(t => {
+      c.qual[t.qualification] = (c.qual[t.qualification] || 0) + 1;
+      c.type[t.type] = (c.type[t.type] || 0) + 1;
+    });
+    return c;
+  }, [filteredTechs]);
+
+  const alertCounts = useMemo(() => {
+    let red = 0, yellow = 0;
+    filteredTechs.forEach(t => { const r = techOverallRag(t, thresholds); if (r === 'critical') red++; else if (r === 'warn') yellow++; });
+    return { red, yellow };
+  }, [filteredTechs, thresholds]);
+
+  const plantChartData = useMemo(() => {
+    const th = chartTheme();
+    const rows = PLANT_NAMES.map(p => {
+      const ts = filteredTechs.filter(t => t.plant === p);
+      const rev = mean(ts.map(t => t.weightedRevPerUnit));
+      return { plant: p, rev };
+    }).filter(r => r.rev != null).sort((a, b) => b.rev - a.rev);
+    return {
+      labels: rows.map(r => r.plant),
+      datasets: [{ label: '單台營收(元)', data: rows.map(r => Math.round(r.rev)), backgroundColor: th.series[0], borderRadius: 4, maxBarThickness: 26 }]
+    };
+  }, [filteredTechs]);
+
+  const typeDonut = useMemo(() => {
+    const th = chartTheme();
+    const order = ['核心戰力', '高產能', '高產值', '需改善', '觀察期'];
+    const colors = [th.series[0], th.series[2], th.series[3], th.critical, th.muted];
+    return { labels: order, datasets: [{ data: order.map(k => counts.type[k] || 0), backgroundColor: colors, borderColor: getCssVar('--bg-surface') || '#fff', borderWidth: 2 }] };
+  }, [counts]);
+
+  const topAlerts = useMemo(() => {
+    return filteredTechs.map(t => ({ t, flags: techAlerts(t, thresholds) }))
+      .filter(x => x.flags.some(f => f.sev === 'critical'))
+      .sort((a, b) => b.flags.length - a.flags.length).slice(0, 6);
+  }, [filteredTechs, thresholds]);
+
+  return React.createElement('div', null,
+    React.createElement('div', { className: 'grid grid-kpi' },
+      React.createElement(Kpi, { label: '技師人數（篩選範圍）', value: filteredTechs.length, formatter: fmtInt }),
+      React.createElement(Kpi, { label: MONTH_LABELS[filters.kpiMonth - 1] + ' 接車台數', value: cur.intake, prevValue: prev.intake, deltaPct: deltaPct(cur.intake, prev.intake), formatter: fmtInt }),
+      React.createElement(Kpi, { label: MONTH_LABELS[filters.kpiMonth - 1] + ' 估算總營收', value: cur.revenue, prevValue: prev.revenue, deltaPct: deltaPct(cur.revenue, prev.revenue), formatter: fmtMoney }),
+      React.createElement(Kpi, { label: '平均單台營收', value: cur.avgRevPerUnit, prevValue: prev.avgRevPerUnit, deltaPct: deltaPct(cur.avgRevPerUnit, prev.avgRevPerUnit), formatter: fmtMoney }),
+      React.createElement(Kpi, { label: '工資營收占比', value: cur.avgLaborRatio, prevValue: prev.avgLaborRatio, deltaPct: deltaPct(cur.avgLaborRatio, prev.avgLaborRatio), formatter: v => fmtPct(v, 1) }),
+      React.createElement(Kpi, { label: '保固車占比', value: cur.avgWarrantyRatio, prevValue: prev.avgWarrantyRatio, deltaPct: deltaPct(cur.avgWarrantyRatio, prev.avgWarrantyRatio), higherIsBetter: false, formatter: v => fmtPct(v, 1) }),
+      React.createElement(Kpi, { label: '平均進廠里程（估）', value: cur.avgMileage, prevValue: prev.avgMileage, deltaPct: deltaPct(cur.avgMileage, prev.avgMileage), higherIsBetter: null, formatter: fmtKm }),
+      React.createElement(Kpi, { label: '分析區間累計台數', value: cumulative.intake, formatter: fmtInt })
+    ),
+    React.createElement('div', { className: 'grid grid-kpi', style: { marginTop: 14 } },
+      React.createElement(Kpi, { label: '正式戰力／觀察期', value: (counts.qual['正式戰力'] || 0) + ' / ' + (counts.qual['觀察期'] || 0), formatter: v => v }),
+      React.createElement(Kpi, { label: '核心戰力人數', value: counts.type['核心戰力'] || 0, formatter: fmtInt }),
+      React.createElement(Kpi, { label: '需改善人數', value: counts.type['需改善'] || 0, formatter: fmtInt }),
+      React.createElement(Kpi, { label: '異常警示（紅／黃燈）', value: alertCounts.red + ' / ' + alertCounts.yellow, formatter: v => v })
+    ),
+    React.createElement('div', { className: 'grid grid-2', style: { marginTop: 14 } },
+      React.createElement('div', { className: 'card' },
+        React.createElement('div', { className: 'card-title' }, '各廠單台營收比較', React.createElement('span', { className: 'hint' }, '依目前篩選條件') ),
+        React.createElement(ChartCanvas, { type: 'bar', data: plantChartData, height: 320, options: { indexAxis: 'y', plugins: { legend: { display: false } } } })
+      ),
+      React.createElement('div', { className: 'card' },
+        React.createElement('div', { className: 'card-title' }, '戰力類型分布'),
+        React.createElement(ChartCanvas, { type: 'doughnut', data: typeDonut, height: 320 })
+      )
+    ),
+    React.createElement('div', { className: 'card', style: { marginTop: 14 } },
+      React.createElement('div', { className: 'card-title' }, '重點異常提醒', React.createElement('span', { className: 'hint' }, '紅燈技師（前 6 位）')),
+      topAlerts.length ? React.createElement('div', { className: 'flag-list' },
+        topAlerts.map(({ t, flags }) => React.createElement('div', { key: techKey(t), className: 'flag-row', onClick: () => goTech(techKey(t)), style: { cursor: 'pointer' } },
+          React.createElement(RagBadge, { rag: 'critical' }),
+          React.createElement('div', null,
+            React.createElement('b', null, t.plant + ' · ' + t.name), ' — ' + flags.map(f => f.label).join('；')
+          )
+        ))
+      ) : React.createElement('div', { className: 'empty-state' }, '目前篩選範圍內沒有紅燈異常技師。')
+    )
+  );
+}
+
+/* ---------------- Plants ---------------- */
+function PlantsPage({ onOpenPlant }) {
+  const th = chartTheme();
+  const [sortKey, setSortKey] = useState('avgIndex');
+  const rows = useMemo(() => [...PLANTS].sort((a, b) => (b[sortKey] || 0) - (a[sortKey] || 0)), [sortKey]);
+
+  const barData = useMemo(() => ({
+    labels: PLANTS.map(p => p.name),
+    datasets: [
+      { label: '月均接車台數', data: PLANTS.map(p => Math.round(p.avgMonthlyIntake)), backgroundColor: th.series[0], borderRadius: 4, maxBarThickness: 22 },
+    ]
+  }), []);
+  const barData2 = useMemo(() => ({
+    labels: PLANTS.map(p => p.name),
+    datasets: [{ label: '單台營收(元)', data: PLANTS.map(p => Math.round(p.avgRevPerUnit)), backgroundColor: th.series[2], borderRadius: 4, maxBarThickness: 22 }]
+  }), []);
+
+  const cols = [
+    ['name', '廠別'], ['techCount', '技師數'], ['formal', '正式戰力'], ['observation', '觀察期'],
+    ['core', '核心戰力'], ['highVolume', '高產能'], ['highValue', '高產值'], ['needsImprovement', '需改善'],
+    ['coreRate', '核心率'], ['avgMonthlyIntake', '月均接車'], ['avgRevPerUnit', '單台營收'],
+    ['avgLaborRatio', '工資比'], ['pct10wUp', '10萬以上%'], ['warrantyRatio', '保固車占比'],
+  ];
+
+  return React.createElement('div', null,
+    React.createElement('div', { className: 'grid grid-2' },
+      React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '各廠月均接車台數'), React.createElement(ChartCanvas, { type: 'bar', data: barData, height: 340 })),
+      React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '各廠單台營收'), React.createElement(ChartCanvas, { type: 'bar', data: barData2, height: 340 }))
+    ),
+    React.createElement('div', { className: 'card', style: { marginTop: 14 } },
+      React.createElement('div', { className: 'card-title' }, '各廠戰力總覽',
+        React.createElement(Select, {
+          value: sortKey, onChange: setSortKey, options: [
+            { value: 'avgIndex', label: '依平均戰力指數排序' }, { value: 'avgRevPerUnit', label: '依單台營收排序' },
+            { value: 'avgMonthlyIntake', label: '依月均接車排序' }, { value: 'coreRate', label: '依核心率排序' },
+            { value: 'needsImprovement', label: '依需改善人數排序' },
+          ]
+        })
+      ),
+      React.createElement('div', { className: 'table-wrap' },
+        React.createElement('table', null,
+          React.createElement('thead', null, React.createElement('tr', null, cols.map(([k, l]) => React.createElement('th', { key: k }, l)))),
+          React.createElement('tbody', null, rows.map(p => React.createElement('tr', { key: p.name, onClick: () => onOpenPlant(p.name) },
+            cols.map(([k]) => {
+              let v = p[k];
+              const isPct = ['coreRate', 'avgLaborRatio', 'pct10wUp', 'warrantyRatio'].includes(k);
+              const isMoney = k === 'avgRevPerUnit';
+              const isNum = typeof v === 'number' && !isPct && !isMoney;
+              return React.createElement('td', { key: k, className: (isPct || isMoney || isNum) ? 'num-cell' : '' },
+                isPct ? fmtPct(v, 1) : isMoney ? fmtMoney(v) : isNum ? fmtNum(v, 1) : v
+              );
+            })
+          )))
+        )
+      )
+    ),
+    React.createElement('div', { className: 'card', style: { marginTop: 14 } },
+      React.createElement('div', { className: 'card-title' }, '各廠管理判讀與需改善名單'),
+      React.createElement('div', { className: 'grid grid-2' },
+        PLANTS.map(p => React.createElement('div', { key: p.name, style: { padding: '10px 0', borderBottom: '1px solid var(--border)' } },
+          React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+            React.createElement('b', null, p.name),
+            React.createElement('span', { className: 'badge ' + (p.needsImprovement > 1 ? 'warn' : 'good') }, p.verdict)
+          ),
+          React.createElement('div', { className: 'foot-note', style: { marginTop: 4, whiteSpace: 'pre-line' } }, p.improveReasons)
+        ))
+      )
+    )
+  );
+}
+
+/* ---------------- Roster table ---------------- */
+const ROSTER_COLS = [
+  { key: 'plant', label: '服務廠' }, { key: 'name', label: '技師' },
+  { key: 'tenure', label: '年資', fmt: v => fmtNum(v, 1), num: true },
+  { key: 'license', label: '證照/職級' },
+  { key: 'effectiveMonths', label: '上線月數', num: true },
+  { key: 'avgMonthlyIntake', label: '月均接車', fmt: v => fmtNum(v, 1), num: true },
+  { key: 'capacityIndex', label: '接車產能指數', fmt: v => fmtNum(v, 1), num: true },
+  { key: 'weightedRevPerUnit', label: '單台營收', fmt: fmtMoney, num: true },
+  { key: 'valueIndex', label: '單車產值指數', fmt: v => fmtNum(v, 1), num: true },
+  { key: 'avgLaborRatio', label: '工資占比', fmt: v => fmtPct(v, 1), num: true },
+  { key: 'laborIndex', label: '工資能力指數', fmt: v => fmtNum(v, 1), num: true },
+  { key: 'pct10wUp', label: '10萬公里以上%', fmt: v => fmtPct(v, 1), num: true },
+  { key: 'warrantyRatio', label: '保固車占比', fmt: v => fmtPct(v, 1), num: true },
+  { key: 'compositeIndex', label: '綜合戰力指數', fmt: v => fmtNum(v, 1), num: true },
+  { key: 'qualification', label: '戰力資格' },
+  { key: 'type', label: '戰力類型' },
+  { key: 'plantRank', label: '廠內排名', num: true },
+];
+const ROSTER_DEFAULT_VISIBLE = ['plant', 'name', 'tenure', 'avgMonthlyIntake', 'weightedRevPerUnit', 'avgLaborRatio', 'warrantyRatio', 'compositeIndex', 'qualification', 'type', 'plantRank'];
+
+function RosterPage({ filteredTechs, thresholds, goTech }) {
+  const [sort, setSort] = useState({ key: 'compositeIndex', dir: -1 });
+  const [visibleCols, setVisibleCols] = useState(ROSTER_DEFAULT_VISIBLE);
+  const [showColPicker, setShowColPicker] = useState(false);
+  const [showExport, setShowExport] = useState(false);
+
+  const sorted = useMemo(() => {
+    const arr = [...filteredTechs];
+    arr.sort((a, b) => {
+      const va = a[sort.key], vb = b[sort.key];
+      if (va == null) return 1; if (vb == null) return -1;
+      if (typeof va === 'string') return va.localeCompare(vb) * sort.dir;
+      return (va - vb) * sort.dir;
+    });
+    return arr;
+  }, [filteredTechs, sort]);
+
+  const cols = ROSTER_COLS.filter(c => visibleCols.includes(c.key));
+
+  function toggleSort(key) { setSort(s => s.key === key ? { key, dir: -s.dir } : { key, dir: -1 }); }
+
+  const exportRows = sorted.map(t => cols.map(c => c.fmt ? c.fmt(t[c.key]) : t[c.key]));
+
+  return React.createElement('div', null,
+    React.createElement('div', { className: 'card' },
+      React.createElement('div', { className: 'card-title' },
+        '技師績效總表（' + sorted.length + ' 位）',
+        React.createElement('div', { style: { display: 'flex', gap: 8 } },
+          React.createElement('button', { className: 'btn btn-sm', onClick: () => setShowColPicker(v => !v) }, '欄位設定'),
+          React.createElement('button', { className: 'btn btn-sm btn-primary', onClick: () => setShowExport(true) }, '匯出 CSV')
+        )
+      ),
+      showColPicker ? React.createElement('div', { className: 'pill-group', style: { marginBottom: 12 } },
+        ROSTER_COLS.map(c => React.createElement('span', {
+          key: c.key, className: 'toggle-pill' + (visibleCols.includes(c.key) ? ' active' : ''),
+          onClick: () => setVisibleCols(v => v.includes(c.key) ? v.filter(x => x !== c.key) : [...v, c.key])
+        }, c.label))
+      ) : null,
+      React.createElement('div', { className: 'table-wrap' },
+        React.createElement('table', null,
+          React.createElement('thead', null, React.createElement('tr', null,
+            cols.map(c => React.createElement('th', { key: c.key, onClick: () => toggleSort(c.key) },
+              c.label, sort.key === c.key ? React.createElement('span', { className: 'sort-arrow' }, sort.dir === -1 ? '▼' : '▲') : null
+            )),
+            React.createElement('th', null, '狀態')
+          )),
+          React.createElement('tbody', null, sorted.map(t => {
+            const rag = techOverallRag(t, thresholds);
+            return React.createElement('tr', { key: techKey(t), onClick: () => goTech(techKey(t)) },
+              cols.map(c => React.createElement('td', { key: c.key, className: c.num ? 'num-cell' : '' }, c.fmt ? c.fmt(t[c.key]) : t[c.key])),
+              React.createElement('td', null, React.createElement(RagBadge, { rag }))
+            );
+          }))
+        )
+      )
+    ),
+    showExport ? React.createElement(ExportModal, { title: '匯出技師績效總表', headers: cols.map(c => c.label).concat('狀態'), rows: sorted.map((t, i) => exportRows[i].concat(techOverallRag(t, thresholds))), onClose: () => setShowExport(false) }) : null
+  );
+}
+
+/* ---------------- Technician detail ---------------- */
+function TechDetailPage({ techKey: selKey, setTechKey, thresholds, role }) {
+  const options = role.role === 'tech' ? TECHS.filter(t => techKey(t) === role.techKey) : TECHS;
+  const tech = options.find(t => techKey(t) === selKey) || options[0];
+  if (!tech) return React.createElement('div', { className: 'empty-state' }, '找不到技師資料');
+
+  const plantPeers = TECHS.filter(t => t.plant === tech.plant);
+  const tenurePeers = TECHS.filter(t => tenureBucketOf(t.tenure) === tenureBucketOf(tech.tenure));
+  const companyAvg = {
+    rev: mean(TECHS.map(t => t.weightedRevPerUnit)), labor: mean(TECHS.map(t => t.avgLaborRatio)),
+    warranty: mean(TECHS.map(t => t.warrantyRatio)), composite: mean(TECHS.map(t => t.compositeIndex)),
+  };
+  const tenureAvg = {
+    rev: mean(tenurePeers.map(t => t.weightedRevPerUnit)), labor: mean(tenurePeers.map(t => t.avgLaborRatio)),
+    composite: mean(tenurePeers.map(t => t.compositeIndex)),
+  };
+
+  const alerts = techAlerts(tech, thresholds);
+  const rag = techOverallRag(tech, thresholds);
+
+  const months = availableMonths(tech);
+  const th = chartTheme();
+  const trendData = useMemo(() => ({
+    labels: months.map(m => MONTH_LABELS[m - 1]),
+    datasets: [
+      { label: '接車台數', data: months.map(m => techMonthly(tech, m).total_count), borderColor: th.series[0], backgroundColor: th.series[0], tension: .3, borderWidth: 2, pointRadius: 3 },
+    ]
+  }), [tech]);
+  const revTrend = useMemo(() => ({
+    labels: months.map(m => MONTH_LABELS[m - 1]),
+    datasets: [
+      { label: '單台營收', data: months.map(m => techMonthly(tech, m).rev_per_unit), borderColor: th.series[2], backgroundColor: th.series[2], tension: .3, borderWidth: 2, pointRadius: 3, yAxisID: 'y' },
+    ]
+  }), [tech]);
+  const mixTrend = useMemo(() => ({
+    labels: months.map(m => MONTH_LABELS[m - 1]),
+    datasets: [
+      { label: '工資占比', data: months.map(m => techMonthly(tech, m).labor_ratio), borderColor: th.series[3], backgroundColor: th.series[3], tension: .3, borderWidth: 2, pointRadius: 3 },
+      { label: '保固車占比', data: months.map(m => techMonthly(tech, m).warranty_ratio), borderColor: th.critical, backgroundColor: th.critical, tension: .3, borderWidth: 2, pointRadius: 3 },
+    ]
+  }), [tech]);
+
+  const mileSums = techMileageSums(tech, 1, 8);
+  const mileTotal = Object.values(mileSums).reduce((a, b) => a + b, 0) || 1;
+  const mileageBar = {
+    labels: MILEAGE_BUCKETS.map(b => b.label),
+    datasets: [{ label: '進廠台數', data: MILEAGE_BUCKETS.map(b => mileSums[b.key]), backgroundColor: th.series.slice(0, 5), borderRadius: 4 }]
+  };
+
+  const compareBar = {
+    labels: ['本人', '同廠平均', '全公司平均', '同年資平均'],
+    datasets: [{ label: '單台營收(元)', data: [tech.weightedRevPerUnit, tech.plantAvgRevPerUnit, companyAvg.rev, tenureAvg.rev].map(v => v ? Math.round(v) : null), backgroundColor: [th.accent, th.series[0], th.series[2], th.series[4]], borderRadius: 4 }]
+  };
+
+  return React.createElement('div', null,
+    options.length > 1 ? React.createElement('div', { className: 'field', style: { marginBottom: 14, maxWidth: 320 } },
+      React.createElement('label', null, '選擇技師'),
+      React.createElement(Select, {
+        value: techKey(tech), onChange: setTechKey,
+        options: [...options].sort((a, b) => a.plant.localeCompare(b.plant) || a.name.localeCompare(b.name)).map(t => ({ value: techKey(t), label: t.plant + ' · ' + t.name }))
+      })
+    ) : null,
+    React.createElement('div', { className: 'grid grid-3' },
+      React.createElement('div', { className: 'card', style: { gridColumn: 'span 1' } },
+        React.createElement('div', { className: 'card-title' }, '基本資料', React.createElement(RagBadge, { rag }) ),
+        React.createElement('div', { className: 'stat-row' }, React.createElement('span', null, '姓名'), React.createElement('b', null, tech.name)),
+        React.createElement('div', { className: 'stat-row' }, React.createElement('span', null, '所屬服務廠'), React.createElement('b', null, tech.plant)),
+        React.createElement('div', { className: 'stat-row' }, React.createElement('span', null, '年資'), React.createElement('b', null, fmtNum(tech.tenure, 1) + ' 年')),
+        React.createElement('div', { className: 'stat-row' }, React.createElement('span', null, '證照 / 職級代碼'), React.createElement('b', null, tech.license || '—')),
+        React.createElement('div', { className: 'stat-row' }, React.createElement('span', null, '有效上線月數'), React.createElement('b', null, tech.effectiveMonths)),
+        React.createElement('div', { className: 'stat-row' }, React.createElement('span', null, '戰力資格 / 類型'), React.createElement('b', null, tech.qualification + ' · ' + tech.type)),
+        React.createElement('div', { className: 'stat-row' }, React.createElement('span', null, '廠內戰力排名'), React.createElement('b', null, '第 ' + tech.plantRank + ' 名')),
+        React.createElement('div', { className: 'divider' }),
+        React.createElement('div', { className: 'foot-note' }, React.createElement('b', null, '結構校正判讀：'), tech.structureNote),
+        React.createElement('div', { className: 'foot-note', style: { marginTop: 6 } }, React.createElement('b', null, '主管關注重點：'), tech.managerFocus)
+      ),
+      React.createElement('div', { className: 'card', style: { gridColumn: 'span 2' } },
+        React.createElement('div', { className: 'card-title' }, '核心指標與比較基準（YTD 1–8月）'),
+        React.createElement('div', { className: 'grid grid-kpi' },
+          React.createElement(Kpi, { label: 'YTD 接車台數', value: techTotalIntake(tech, 1, 8), formatter: fmtInt }),
+          React.createElement(Kpi, { label: 'YTD 估算總營收', value: techTotalRevenue(tech, 1, 8), formatter: fmtMoney }),
+          React.createElement(Kpi, { label: '單台營收', value: tech.weightedRevPerUnit, formatter: fmtMoney }),
+          React.createElement(Kpi, { label: '單台工資（估）', value: tech.weightedRevPerUnit * tech.avgLaborRatio, formatter: fmtMoney }),
+          React.createElement(Kpi, { label: '工資營收占比', value: tech.avgLaborRatio, formatter: v => fmtPct(v, 1) }),
+          React.createElement(Kpi, { label: '保固車占比', value: tech.warrantyRatio, formatter: v => fmtPct(v, 1) }),
+          React.createElement(Kpi, { label: '非保固占比（估）', value: 1 - tech.warrantyRatio, formatter: v => fmtPct(v, 1) }),
+          React.createElement(Kpi, { label: '平均進廠里程（估）', value: techAvgMileage(tech, 1, 8), formatter: fmtKm }),
+          React.createElement(Kpi, { label: '綜合戰力指數', value: tech.compositeIndex, formatter: v => fmtNum(v, 1) })
+        )
+      )
+    ),
+    React.createElement('div', { className: 'card', style: { marginTop: 14 } },
+      React.createElement('div', { className: 'card-title' }, '與同廠 / 全公司 / 同年資平均比較（單台營收）'),
+      React.createElement(ChartCanvas, { type: 'bar', data: compareBar, height: 260, options: { plugins: { legend: { display: false } } } })
+    ),
+    React.createElement('div', { className: 'grid grid-2', style: { marginTop: 14 } },
+      React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '接車台數推移（月）'), React.createElement(ChartCanvas, { type: 'line', data: trendData, height: 260 })),
+      React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '單台營收推移（月）'), React.createElement(ChartCanvas, { type: 'line', data: revTrend, height: 260 }))
+    ),
+    React.createElement('div', { className: 'grid grid-2', style: { marginTop: 14 } },
+      React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '工資占比 / 保固車占比推移'), React.createElement(ChartCanvas, { type: 'line', data: mixTrend, height: 260 })),
+      React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, 'YTD 進廠里程結構'), React.createElement(ChartCanvas, { type: 'bar', data: mileageBar, height: 260, options: { plugins: { legend: { display: false } } } }))
+    ),
+    React.createElement('div', { className: 'card', style: { marginTop: 14 } },
+      React.createElement('div', { className: 'card-title' }, '異常提醒'),
+      alerts.length ? React.createElement('div', { className: 'flag-list' }, alerts.map((f, i) => React.createElement('div', { key: i, className: 'flag-row' }, React.createElement(RagBadge, { rag: f.sev }), React.createElement('span', null, f.label))))
+        : React.createElement('div', { className: 'empty-state' }, '目前沒有異常提醒。')
+    )
+  );
+}
+
+/* ---------------- Tenure analysis ---------------- */
+function TenurePage({ filteredTechs }) {
+  const th = chartTheme();
+  const groups = TENURE_BUCKETS.map(b => {
+    const ts = filteredTechs.filter(t => tenureBucketOf(t.tenure) === b.key);
+    return {
+      key: b.key, label: b.label, count: ts.length,
+      avgIntake: mean(ts.map(t => t.avgMonthlyIntake)), avgRev: mean(ts.map(t => t.weightedRevPerUnit)),
+      avgLabor: mean(ts.map(t => t.avgLaborRatio)), avgWarranty: mean(ts.map(t => t.warrantyRatio)),
+      avgCapacity: mean(ts.map(t => t.capacityIndex)), avgValue: mean(ts.map(t => t.valueIndex)),
+      avgLaborIdx: mean(ts.map(t => t.laborIndex)), avgComposite: mean(ts.map(t => t.compositeIndex)),
+    };
+  });
+
+  const barData = {
+    labels: groups.map(g => g.label),
+    datasets: [
+      { label: '單車產值指數', data: groups.map(g => g.avgValue && Math.round(g.avgValue)), backgroundColor: th.series[0], borderRadius: 4 },
+      { label: '工資能力指數', data: groups.map(g => g.avgLaborIdx && Math.round(g.avgLaborIdx)), backgroundColor: th.series[3], borderRadius: 4 },
+      { label: '綜合戰力指數', data: groups.map(g => g.avgComposite && Math.round(g.avgComposite)), backgroundColor: th.series[2], borderRadius: 4 },
+    ]
+  };
+
+  const scatterValue = {
+    datasets: [{ label: '技師', data: filteredTechs.map(t => ({ x: t.tenure, y: t.valueIndex, name: t.name })), backgroundColor: th.series[0], pointRadius: 4 }]
+  };
+  const scatterEff = {
+    datasets: [{ label: '技師', data: filteredTechs.map(t => ({ x: t.tenure, y: t.laborIndex, name: t.name })), backgroundColor: th.series[2], pointRadius: 4 }]
+  };
+  const scatterOpt = (xlabel, ylabel) => ({
+    plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => (c.raw.name || '') + '：年資 ' + fmtNum(c.raw.x, 1) + '，' + ylabel + ' ' + fmtNum(c.raw.y, 1) } } },
+    scales: { x: { title: { display: true, text: xlabel, color: chartTheme().muted } }, y: { title: { display: true, text: ylabel, color: chartTheme().muted } } }
+  });
+
+  return React.createElement('div', null,
+    React.createElement('div', { className: 'card' },
+      React.createElement('div', { className: 'card-title' }, '各年資區間平均指數比較'),
+      React.createElement(ChartCanvas, { type: 'bar', data: barData, height: 320 })
+    ),
+    React.createElement('div', { className: 'table-wrap card', style: { marginTop: 14, padding: 0 } },
+      React.createElement('table', null,
+        React.createElement('thead', null, React.createElement('tr', null, ['年資區間', '技師數', '平均月接車', '平均單台營收', '平均工資占比', '平均保固占比', '平均綜合指數'].map(h => React.createElement('th', { key: h }, h)))),
+        React.createElement('tbody', null, groups.map(g => React.createElement('tr', { key: g.key },
+          React.createElement('td', null, g.label), React.createElement('td', { className: 'num-cell' }, g.count),
+          React.createElement('td', { className: 'num-cell' }, fmtNum(g.avgIntake, 1)), React.createElement('td', { className: 'num-cell' }, fmtMoney(g.avgRev)),
+          React.createElement('td', { className: 'num-cell' }, fmtPct(g.avgLabor, 1)), React.createElement('td', { className: 'num-cell' }, fmtPct(g.avgWarranty, 1)),
+          React.createElement('td', { className: 'num-cell' }, fmtNum(g.avgComposite, 1))
+        )))
+      )
+    ),
+    React.createElement('div', { className: 'grid grid-2', style: { marginTop: 14 } },
+      React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '年資 vs. 單車產值指數'), React.createElement(ChartCanvas, { type: 'scatter', data: scatterValue, height: 300, options: scatterOpt('年資（年）', '產值指數') })),
+      React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '年資 vs. 工資能力指數（工時效率代理指標）'), React.createElement(ChartCanvas, { type: 'scatter', data: scatterEff, height: 300, options: scatterOpt('年資（年）', '工資能力指數') }))
+    ),
+    React.createElement('p', { className: 'foot-note', style: { marginTop: 10 } }, '＊來源資料無出勤與銷售工時欄位，故以「工資能力指數」作為工時效率之代理指標。')
+  );
+}
+
+/* ---------------- Mileage analysis ---------------- */
+function MileagePage({ filteredTechs, filters }) {
+  const th = chartTheme();
+  const rows = MILEAGE_BUCKETS.map(b => {
+    let count = 0;
+    filteredTechs.forEach(t => { for (let m = filters.from; m <= filters.to; m++) { const r = techMonthly(t, m); if (r && typeof r[b.key] === 'number') count += r[b.key]; } });
+    return { key: b.key, label: b.label, count };
+  });
+  const totalCount = rows.reduce((a, r) => a + r.count, 0) || 1;
+  const avgRev = mean(filteredTechs.map(t => t.weightedRevPerUnit)) || 0;
+
+  const stackedByPlant = PLANT_NAMES.map(p => {
+    const ts = TECHS.filter(t => t.plant === p);
+    const sums = { m0_1: 0, m1_3: 0, m3_5: 0, m5_10: 0, m10up: 0 };
+    ts.forEach(t => { const s = techMileageSums(t, filters.from, filters.to); MILEAGE_BUCKETS.forEach(b => sums[b.key] += s[b.key]); });
+    return { plant: p, sums };
+  });
+  const stackedData = {
+    labels: stackedByPlant.map(r => r.plant),
+    datasets: MILEAGE_BUCKETS.map((b, i) => ({
+      label: b.label, data: stackedByPlant.map(r => r.sums[b.key]), backgroundColor: th.series[i], borderRadius: 3,
+    }))
+  };
+  const stackedOpt = { scales: { x: { stacked: true, ticks: { color: chartTheme().muted } }, y: { stacked: true, ticks: { color: chartTheme().muted }, grid: { color: chartTheme().grid } } } };
+
+  const donut = { labels: rows.map(r => r.label), datasets: [{ data: rows.map(r => r.count), backgroundColor: th.series, borderColor: getCssVar('--bg-surface') || '#fff', borderWidth: 2 }] };
+
+  return React.createElement('div', null,
+    React.createElement('div', { className: 'grid grid-2' },
+      React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '進廠里程區間占比（篩選範圍）'), React.createElement(ChartCanvas, { type: 'doughnut', data: donut, height: 300 })),
+      React.createElement('div', { className: 'card' },
+        React.createElement('div', { className: 'card-title' }, '各里程區間統計（估算營收）', React.createElement('span', { className: 'hint' }, '以平均單台營收估算')),
+        React.createElement('div', { className: 'table-wrap' },
+          React.createElement('table', null,
+            React.createElement('thead', null, React.createElement('tr', null, ['里程區間', '台數', '占比', '估算營收', '營收占比'].map(h => React.createElement('th', { key: h }, h)))),
+            React.createElement('tbody', null, rows.map(r => {
+              const revEst = r.count * avgRev; const revShare = revEst / (totalCount * avgRev || 1);
+              return React.createElement('tr', { key: r.key },
+                React.createElement('td', null, r.label), React.createElement('td', { className: 'num-cell' }, fmtInt(r.count)),
+                React.createElement('td', { className: 'num-cell' }, fmtPct(r.count / totalCount, 1)),
+                React.createElement('td', { className: 'num-cell' }, fmtMoney(revEst)), React.createElement('td', { className: 'num-cell' }, fmtPct(revShare, 1))
+              );
+            }))
+          )
+        )
+      )
+    ),
+    React.createElement('div', { className: 'card', style: { marginTop: 14 } },
+      React.createElement('div', { className: 'card-title' }, '各廠里程結構比較（堆疊台數）'),
+      React.createElement(ChartCanvas, { type: 'bar', data: stackedData, height: 340, options: stackedOpt })
+    )
+  );
+}
+
+/* ---------------- Revenue structure ---------------- */
+function RevenuePage({ filteredTechs }) {
+  const th = chartTheme();
+  const laborShare = mean(filteredTechs.map(t => t.avgLaborRatio));
+  const warrantyShare = mean(filteredTechs.map(t => t.warrantyRatio));
+  const donut1 = { labels: ['工資收入占比', '非工資收入占比（零件／鈑烤／其他，估）'], datasets: [{ data: [laborShare, 1 - laborShare], backgroundColor: [th.series[0], th.series[3]], borderColor: getCssVar('--bg-surface') || '#fff', borderWidth: 2 }] };
+  const donut2 = { labels: ['保固營收占比', '非保固營收占比（自費／理賠／補償，估）'], datasets: [{ data: [warrantyShare, 1 - warrantyShare], backgroundColor: [th.critical, th.series[2]], borderColor: getCssVar('--bg-surface') || '#fff', borderWidth: 2 }] };
+
+  const byPlant = PLANT_NAMES.map(p => {
+    const ts = TECHS.filter(t => t.plant === p);
+    return { plant: p, labor: mean(ts.map(t => t.avgLaborRatio)), warranty: mean(ts.map(t => t.warrantyRatio)) };
+  });
+  const stackData = {
+    labels: byPlant.map(r => r.plant),
+    datasets: [
+      { label: '工資收入占比', data: byPlant.map(r => +(r.labor * 100).toFixed(1)), backgroundColor: th.series[0], borderRadius: 3 },
+      { label: '非工資收入占比（估）', data: byPlant.map(r => +((1 - r.labor) * 100).toFixed(1)), backgroundColor: th.series[3], borderRadius: 3 },
+    ]
+  };
+  const stackOpt = { scales: { x: { stacked: true, ticks: { color: chartTheme().muted } }, y: { stacked: true, ticks: { color: chartTheme().muted, callback: v => v + '%' }, grid: { color: chartTheme().grid } } } };
+
+  return React.createElement('div', null,
+    React.createElement('p', { className: 'foot-note', style: { marginBottom: 12 } }, '＊來源資料未提供零件／鈑烤／其他收入及理賠／補償的獨立欄位，故以「工資占比」與「保固占比」推算對應的非工資、非保固份額；如需精確拆分請於資料匯入頁補充對應欄位。'),
+    React.createElement('div', { className: 'grid grid-2' },
+      React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '收入結構（工資 vs 非工資，估）'), React.createElement(ChartCanvas, { type: 'doughnut', data: donut1, height: 300 })),
+      React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '營收來源結構（保固 vs 非保固，估）'), React.createElement(ChartCanvas, { type: 'doughnut', data: donut2, height: 300 }))
+    ),
+    React.createElement('div', { className: 'card', style: { marginTop: 14 } },
+      React.createElement('div', { className: 'card-title' }, '各廠工資收入占比結構比較'),
+      React.createElement(ChartCanvas, { type: 'bar', data: stackData, height: 340, options: stackOpt })
+    )
+  );
+}
+
+/* ---------------- Trend page ---------------- */
+function TrendPage({ filteredTechs, role }) {
+  const th = chartTheme();
+  const [metric, setMetric] = useState('intake');
+  const [compareMode, setCompareMode] = useState('plant');
+  const metricLabels = { intake: '接車台數', rev: '單台營收', labor: '工資占比', warranty: '保固車占比' };
+
+  function seriesFor(techs) {
+    return MONTHS.map(m => {
+      const agg = aggregateForPeriod(techs, m);
+      if (metric === 'intake') return agg.intake;
+      if (metric === 'rev') return agg.avgRevPerUnit;
+      if (metric === 'labor') return agg.avgLaborRatio;
+      return agg.avgWarrantyRatio;
+    });
+  }
+
+  const selfSeries = seriesFor(filteredTechs);
+  const plant = filteredTechs[0] ? filteredTechs[0].plant : PLANT_NAMES[0];
+  const plantSeries = seriesFor(TECHS.filter(t => t.plant === plant));
+  const companySeries = seriesFor(TECHS);
+
+  const datasets = [{ label: role.role === 'tech' ? '本人' : '篩選範圍', data: selfSeries, borderColor: th.accent, backgroundColor: th.accent, borderWidth: 2, tension: .3, pointRadius: 3 }];
+  if (compareMode === 'plant' || compareMode === 'both') datasets.push({ label: plant + ' 廠平均', data: plantSeries, borderColor: th.series[0], backgroundColor: th.series[0], borderWidth: 2, tension: .3, pointRadius: 3, borderDash: [4, 3] });
+  if (compareMode === 'company' || compareMode === 'both') datasets.push({ label: '全公司平均', data: companySeries, borderColor: th.series[2], backgroundColor: th.series[2], borderWidth: 2, tension: .3, pointRadius: 3, borderDash: [2, 2] });
+
+  const lineData = { labels: MONTH_LABELS, datasets };
+  const isPctMetric = metric === 'labor' || metric === 'warranty';
+
+  return React.createElement('div', null,
+    React.createElement('div', { className: 'filter-bar', style: { marginTop: 0, marginBottom: 14 } },
+      React.createElement('div', { className: 'field' }, React.createElement('label', null, '指標'),
+        React.createElement(Select, { value: metric, onChange: setMetric, options: Object.entries(metricLabels).map(([k, l]) => ({ value: k, label: l })) })
+      ),
+      React.createElement('div', { className: 'field' }, React.createElement('label', null, '比較基準'),
+        React.createElement(Select, { value: compareMode, onChange: setCompareMode, options: [{ value: 'none', label: '不顯示比較' }, { value: 'plant', label: '同廠平均' }, { value: 'company', label: '全公司平均' }, { value: 'both', label: '同廠＋全公司' }] })
+      )
+    ),
+    React.createElement('div', { className: 'card' },
+      React.createElement('div', { className: 'card-title' }, metricLabels[metric] + ' 推移（1–8月，完整月份）'),
+      React.createElement(ChartCanvas, {
+        type: 'line', data: lineData, height: 380,
+        options: isPctMetric ? { scales: { y: { ticks: { callback: v => (v * 100).toFixed(0) + '%', color: chartTheme().muted }, grid: { color: chartTheme().grid } } } } : {}
+      })
+    )
+  );
+}
+
+/* ---------------- Ranking & alerts ---------------- */
+const RANK_METRICS = [
+  { key: 'revenue', label: '估算總營收（區間累計）', get: (t, f) => techTotalRevenue(t, f.from, f.to), fmt: fmtMoney },
+  { key: 'avgRev', label: '單台營收', get: t => t.weightedRevPerUnit, fmt: fmtMoney },
+  { key: 'avgWage', label: '單台工資（估）', get: t => t.weightedRevPerUnit * t.avgLaborRatio, fmt: fmtMoney },
+  { key: 'laborIndex', label: '工資能力指數（工時效率代理）', get: t => t.laborIndex, fmt: v => fmtNum(v, 1) },
+  { key: 'selfPay', label: '非保固營收（估）', get: t => techTotalRevenue(t, 1, 8) * (1 - t.warrantyRatio), fmt: fmtMoney },
+  { key: 'composite', label: '綜合戰力指數（達成率）', get: t => t.compositeIndex, fmt: v => fmtNum(v, 1) },
+  { key: 'growth', label: '成長幅度（近2月 vs 前2月）', get: t => growthRate(t), fmt: v => v == null ? '—' : (v * 100).toFixed(1) + '%' },
+];
+function growthRate(t) {
+  const ms = availableMonths(t);
+  if (ms.length < 4) return null;
+  const last2 = ms.slice(-2), prev2 = ms.slice(-4, -2);
+  const a = mean(last2.map(m => techMonthly(t, m).total_count * techMonthly(t, m).rev_per_unit));
+  const b = mean(prev2.map(m => techMonthly(t, m).total_count * techMonthly(t, m).rev_per_unit));
+  if (a == null || b == null || b === 0) return null;
+  return (a - b) / b;
+}
+
+function RankingPage({ filteredTechs, filters, thresholds, goTech }) {
+  const [metricKey, setMetricKey] = useState('revenue');
+  const [dir, setDir] = useState(-1);
+  const [tab, setTab] = useState('ranking');
+  const metric = RANK_METRICS.find(m => m.key === metricKey);
+
+  const ranked = useMemo(() => {
+    return filteredTechs.map(t => ({ t, v: metric.get(t, filters) })).filter(x => x.v != null)
+      .sort((a, b) => (a.v - b.v) * dir).slice(0, 10);
+  }, [filteredTechs, metricKey, dir, filters]);
+
+  const alertRows = useMemo(() => filteredTechs.map(t => ({ t, flags: techAlerts(t, thresholds) }))
+    .filter(x => x.flags.length).sort((a, b) => {
+      const sevScore = f => f.flags.reduce((s, x) => s + SEV_RANK[x.sev], 0);
+      return sevScore(b) - sevScore(a);
+    }), [filteredTechs, thresholds]);
+
+  return React.createElement('div', null,
+    React.createElement('div', { className: 'tabs' },
+      React.createElement('div', { className: 'tab' + (tab === 'ranking' ? ' active' : ''), onClick: () => setTab('ranking') }, '排行榜'),
+      React.createElement('div', { className: 'tab' + (tab === 'alerts' ? ' active' : ''), onClick: () => setTab('alerts') }, '異常提醒清單 (' + alertRows.length + ')')
+    ),
+    React.createElement('p', { className: 'foot-note', style: { marginBottom: 12 } }, '排行榜與異常清單皆套用頁首目前的全域篩選條件（服務廠／年資／戰力資格等），可用來查看「同廠排名」或「同年資排名」。'),
+    tab === 'ranking' ? React.createElement(React.Fragment, null,
+      React.createElement('div', { className: 'filter-bar', style: { marginTop: 0, marginBottom: 12 } },
+        React.createElement('div', { className: 'field' }, React.createElement('label', null, '排名指標'), React.createElement(Select, { value: metricKey, onChange: setMetricKey, options: RANK_METRICS.map(m => ({ value: m.key, label: m.label })) })),
+        React.createElement('div', { className: 'field' }, React.createElement('label', null, '排序方向'), React.createElement(Select, { value: String(dir), onChange: v => setDir(+v), options: [{ value: '-1', label: '由高到低（Top10）' }, { value: '1', label: '由低到高（後10名）' }] }))
+      ),
+      React.createElement('div', { className: 'card' },
+        React.createElement('div', { className: 'table-wrap' },
+          React.createElement('table', null,
+            React.createElement('thead', null, React.createElement('tr', null, ['名次', '服務廠', '技師', metric.label].map(h => React.createElement('th', { key: h }, h)))),
+            React.createElement('tbody', null, ranked.map((r, i) => React.createElement('tr', { key: techKey(r.t), onClick: () => goTech(techKey(r.t)) },
+              React.createElement('td', { className: 'num-cell' }, i + 1), React.createElement('td', null, r.t.plant), React.createElement('td', null, r.t.name),
+              React.createElement('td', { className: 'num-cell' }, metric.fmt(r.v))
+            )))
+          )
+        )
+      )
+    ) : React.createElement('div', { className: 'card' },
+      alertRows.length ? React.createElement('div', { className: 'flag-list' },
+        alertRows.map(({ t, flags }) => React.createElement('div', { key: techKey(t), className: 'flag-row', onClick: () => goTech(techKey(t)), style: { cursor: 'pointer', flexDirection: 'column', alignItems: 'stretch' } },
+          React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between' } },
+            React.createElement('b', null, t.plant + ' · ' + t.name),
+            React.createElement(RagBadge, { rag: techOverallRag(t, thresholds) })
+          ),
+          React.createElement('ul', { style: { margin: '4px 0 0 18px', padding: 0 } }, flags.map((f, i) => React.createElement('li', { key: i }, f.label)))
+        ))
+      ) : React.createElement('div', { className: 'empty-state' }, '目前篩選範圍內沒有異常提醒。')
+    )
+  );
+}
+
+/* ---------------- Import page ---------------- */
+const IMPORT_FIELDS = ['日期', '服務廠代碼', '服務廠名稱', '技師員工編號', '技師姓名', '到職日期', '職級', '工單號碼', '車牌或車輛識別碼', '車型', '車齡', '進廠里程', '維修類型', '工單類型', '自費／保固／理賠／補償', '工資收入', '零件收入', '鈑噴收入', '其他收入', '總營收', '銷售工時', '出勤工時', '完工狀態', '交車日期'];
+const REQUIRED_FIELDS = ['日期', '服務廠名稱', '技師姓名', '工單號碼', '總營收'];
+
+function ImportPage() {
+  const [fileName, setFileName] = useState(null);
+  const [headers, setHeaders] = useState([]);
+  const [rows, setRows] = useState([]);
+  const [mapping, setMapping] = useState({});
+  const [busy, setBusy] = useState(false);
+  const fileRef = useRef(null);
+
+  function autoMap(hdrs) {
+    const m = {};
+    IMPORT_FIELDS.forEach(f => { const hit = hdrs.find(h => String(h).trim() === f); if (hit) m[f] = hit; });
+    return m;
+  }
+
+  function handleFile(file) {
+    if (!file) return;
+    setBusy(true); setFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'binary' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(ws, { defval: null });
+        const hdrs = json.length ? Object.keys(json[0]) : [];
+        setHeaders(hdrs); setRows(json); setMapping(autoMap(hdrs));
+      } catch (err) { alert('檔案解析失敗：' + err.message); }
+      setBusy(false);
+    };
+    reader.readAsBinaryString(file);
+  }
+
+  const validation = useMemo(() => {
+    if (!rows.length) return null;
+    const errors = []; const seenOrders = new Set(); let dup = 0;
+    rows.forEach((r, i) => {
+      const rowErrs = [];
+      REQUIRED_FIELDS.forEach(f => { const col = mapping[f]; if (!col || r[col] == null || r[col] === '') rowErrs.push(f + ' 缺值'); });
+      const orderCol = mapping['工單號碼'];
+      if (orderCol && r[orderCol] != null) {
+        if (seenOrders.has(r[orderCol])) { rowErrs.push('重複工單號碼'); dup++; }
+        seenOrders.add(r[orderCol]);
+      }
+      const revCol = mapping['總營收'];
+      if (revCol && r[revCol] != null && (isNaN(+r[revCol]) || +r[revCol] < 0)) rowErrs.push('總營收數值異常');
+      if (rowErrs.length) errors.push({ row: i + 2, msgs: rowErrs });
+    });
+    return { errors, dup, ok: rows.length - errors.length };
+  }, [rows, mapping]);
+
+  return React.createElement('div', null,
+    React.createElement('div', { className: 'card' },
+      React.createElement('div', { className: 'card-title' }, '上傳 Excel／CSV'),
+      React.createElement('div', { className: 'drop-zone', onClick: () => fileRef.current.click() },
+        React.createElement('input', { type: 'file', ref: fileRef, accept: '.xlsx,.xls,.csv', style: { display: 'none' }, onChange: e => handleFile(e.target.files[0]) }),
+        fileName ? '已選擇：' + fileName + '（點擊重新選擇）' : '點擊選擇檔案，或將 .xlsx / .csv 拖放至此'
+      ),
+      busy ? React.createElement('p', { className: 'foot-note' }, '解析中…') : null
+    ),
+    headers.length ? React.createElement('div', { className: 'card', style: { marginTop: 14 } },
+      React.createElement('div', { className: 'card-title' }, '欄位對應', React.createElement('span', { className: 'hint' }, '系統已嘗試自動比對，可手動調整')),
+      React.createElement('div', { className: 'grid grid-3' },
+        IMPORT_FIELDS.map(f => React.createElement('div', { key: f, className: 'field' },
+          React.createElement('label', null, f + (REQUIRED_FIELDS.includes(f) ? ' *必填' : '')),
+          React.createElement(Select, {
+            value: mapping[f] || '', onChange: v => setMapping(m => Object.assign({}, m, { [f]: v })),
+            options: [{ value: '', label: '未對應' }].concat(headers.map(h => ({ value: h, label: h })))
+          })
+        ))
+      )
+    ) : null,
+    validation ? React.createElement('div', { className: 'card', style: { marginTop: 14 } },
+      React.createElement('div', { className: 'card-title' }, '匯入結果預覽'),
+      React.createElement('div', { className: 'grid grid-kpi' },
+        React.createElement(Kpi, { label: '總筆數', value: rows.length, formatter: fmtInt }),
+        React.createElement(Kpi, { label: '成功筆數', value: validation.ok, formatter: fmtInt }),
+        React.createElement(Kpi, { label: '失敗筆數', value: validation.errors.length, formatter: fmtInt }),
+        React.createElement(Kpi, { label: '重複工單', value: validation.dup, formatter: fmtInt })
+      ),
+      validation.errors.length ? React.createElement('div', { className: 'table-wrap', style: { marginTop: 12, maxHeight: 260 } },
+        React.createElement('table', null,
+          React.createElement('thead', null, React.createElement('tr', null, React.createElement('th', null, '資料列'), React.createElement('th', null, '錯誤原因'))),
+          React.createElement('tbody', null, validation.errors.slice(0, 200).map((e, i) => React.createElement('tr', { key: i }, React.createElement('td', null, '第 ' + e.row + ' 列'), React.createElement('td', null, e.msgs.join('、')))))
+        )
+      ) : React.createElement('div', { className: 'empty-state' }, '所有資料列皆通過驗證。'),
+      React.createElement('p', { className: 'foot-note', style: { marginTop: 10 } }, '＊此頁僅供上傳前驗證預覽，尚未寫入正式資料庫；正式上線後可串接公司資料庫或 API 完成寫入。')
+    ) : null
+  );
+}
+
+/* ---------------- Settings page ---------------- */
+function SettingsPage({ thresholds, setThresholds }) {
+  const [local, setLocal] = useState(thresholds);
+  function set(k, v) { setLocal(l => Object.assign({}, l, { [k]: v })); }
+  const fields = [
+    ['revGapPct', '單台營收低於同廠平均 (%) → 觸發異常', 1],
+    ['laborLow', '工資占比合理下限', 0.01],
+    ['laborHigh', '工資占比合理上限', 0.01],
+    ['warrantyGapPct', '保固車占比高於同廠平均 (%) → 觸發異常', 1],
+    ['compositeGreen', '綜合戰力指數 綠燈門檻（≥）', 1],
+    ['compositeWarn', '綜合戰力指數 黃燈門檻（≥）', 1],
+    ['seniorYears', '「高年資」定義（年）', 1],
+    ['newHireYears', '「新進技師」定義（年）', 0.5],
+  ];
+  return React.createElement('div', { className: 'card', style: { maxWidth: 640 } },
+    React.createElement('div', { className: 'card-title' }, '異常提醒門檻設定'),
+    React.createElement('p', { className: 'foot-note', style: { marginBottom: 12 } }, '此處設定將即時套用至全站的紅／黃／綠燈判定，儲存在目前瀏覽器（如需跨裝置共用設定，須串接後端資料庫）。'),
+    React.createElement('div', { className: 'grid grid-2' },
+      fields.map(([k, l, step]) => React.createElement('div', { key: k, className: 'field' },
+        React.createElement('label', null, l),
+        React.createElement('input', { type: 'number', step, value: local[k], onChange: e => set(k, +e.target.value) })
+      ))
+    ),
+    React.createElement('div', { style: { display: 'flex', gap: 8, marginTop: 16 } },
+      React.createElement('button', { className: 'btn btn-primary', onClick: () => setThresholds(local) }, '儲存設定'),
+      React.createElement('button', { className: 'btn', onClick: () => { setLocal(DEFAULT_THRESHOLDS); setThresholds(DEFAULT_THRESHOLDS); } }, '重設為預設值')
+    )
+  );
+}
+
+/* ---------------- Roles page ---------------- */
+function RolesPage({ role, setRole }) {
+  return React.createElement('div', { className: 'card', style: { maxWidth: 640 } },
+    React.createElement('div', { className: 'card-title' }, '使用者權限管理（示範）'),
+    React.createElement('p', { className: 'foot-note', style: { marginBottom: 14 } }, '切換角色以模擬不同權限視角：服務部主管可檢視所有服務廠與技師；廠長／技師長僅能檢視自己服務廠；技師僅能檢視自己的績效資料。'),
+    React.createElement('div', { className: 'field', style: { marginBottom: 12 } },
+      React.createElement('label', null, '角色'),
+      React.createElement(Select, {
+        value: role.role, onChange: v => setRole(r => Object.assign({}, r, { role: v })),
+        options: [{ value: 'manager', label: '服務部主管' }, { value: 'plantHead', label: '廠長／技師長' }, { value: 'tech', label: '技師' }]
+      })
+    ),
+    role.role === 'plantHead' ? React.createElement('div', { className: 'field', style: { marginBottom: 12 } },
+      React.createElement('label', null, '所屬服務廠'),
+      React.createElement(Select, { value: role.plant, onChange: v => setRole(r => Object.assign({}, r, { plant: v })), options: PLANT_NAMES.map(p => ({ value: p, label: p })) })
+    ) : null,
+    role.role === 'tech' ? React.createElement('div', { className: 'field', style: { marginBottom: 12 } },
+      React.createElement('label', null, '技師身分'),
+      React.createElement(Select, {
+        value: role.techKey, onChange: v => setRole(r => Object.assign({}, r, { techKey: v })),
+        options: [...TECHS].sort((a, b) => a.plant.localeCompare(b.plant)).map(t => ({ value: techKey(t), label: t.plant + ' · ' + t.name }))
+      })
+    ) : null,
+    React.createElement('div', { className: 'divider' }),
+    React.createElement('div', { className: 'foot-note' },
+      React.createElement('b', null, '權限說明：'),
+      React.createElement('ul', { style: { margin: '6px 0 0 18px', padding: 0 } },
+        React.createElement('li', null, '服務部主管：可查看所有服務廠、所有技師、匯入資料與門檻設定'),
+        React.createElement('li', null, '廠長／技師長：全域篩選器鎖定於所屬服務廠，僅能比較廠內技師'),
+        React.createElement('li', null, '技師：僅能查看自己的個人分析、績效推移與里程結構，其餘管理頁面隱藏')
+      )
+    )
+  );
+}
+
+/* ---------------- mount ---------------- */
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+</script>
