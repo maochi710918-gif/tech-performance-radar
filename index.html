@@ -249,7 +249,11 @@ const PLANT_NAMES = PLANTS.map(p => p.name);
 const OVERALL = DATA.overall;
 
 // derive revenue-composition ratios once, from the real 自費／補償 breakdown
-PLANTS.forEach(p => { p.compRevenueRatio = p.totalRevenue8 > 0 ? p.compRevenue / p.totalRevenue8 : null; });
+PLANTS.forEach(p => {
+  p.compRevenueRatio = p.totalRevenue8 > 0 ? p.compRevenue / p.totalRevenue8 : null;
+  p.csiOverall = p.csi ? p.csi.overall : null;
+  p.csiCheckout = p.csi ? p.csi.checkout : null;
+});
 function plantCompRatio(plantName) { const p = PLANTS.find(x => x.name === plantName); return p ? p.compRevenueRatio : null; }
 TECHS.forEach(t => {
   t.compRevenueRatio = t.totalRevenue > 0 ? t.compRevenueSum / t.totalRevenue : null;
@@ -258,7 +262,10 @@ TECHS.forEach(t => {
   t.partsRatio = t.totalRevenue > 0 ? t.partsSum / t.totalRevenue : null;
   t.externalRatio = t.totalRevenue > 0 ? t.selfExternalSum / t.totalRevenue : null;
   t.plantAvgCompRatio = plantCompRatio(t.plant);
+  t.csiOverall = t.csi ? t.csi.overall : null;
+  t.csiCheckout = t.csi ? t.csi.checkout : null;
 });
+[...TECHS].sort((a, b) => (b.compositeIndex || 0) - (a.compositeIndex || 0)).forEach((t, i) => { t.companyRank = i + 1; });
 
 const TENURE_BUCKETS = [
   { key: 'lt1', label: '未滿1年', test: t => t < 1 },
@@ -274,7 +281,7 @@ const TYPE_OPTIONS = ['核心戰力', '高產能', '高產值', '需改善', '�
 const QUAL_OPTIONS = ['正式戰力', '觀察期'];
 
 const DEFAULT_THRESHOLDS = {
-  revGapPct: 10, laborLow: 0.16, laborHigh: 0.22,
+  revGapPct: 10, laborGapPct: 3,
   compGapPct: 3, compositeGreen: 100, compositeWarn: 90,
   seniorYears: 10, newHireYears: 1,
 };
@@ -319,12 +326,12 @@ function ragRevGap(techRev, plantRev, th) {
   if (gapPct >= th.revGapPct / 2) return 'warn';
   return 'good';
 }
-function ragLabor(ratio, th) {
-  if (ratio == null) return 'gray';
-  if (ratio >= th.laborLow && ratio <= th.laborHigh) return 'good';
-  const buf = 0.02;
-  if (ratio >= th.laborLow - buf && ratio <= th.laborHigh + buf) return 'warn';
-  return 'critical';
+function ragLabor(techR, plantR, th) {
+  if (techR == null || plantR == null) return 'gray';
+  const gapPts = Math.abs(techR - plantR) * 100;
+  if (gapPts >= th.laborGapPct) return 'critical';
+  if (gapPts >= th.laborGapPct / 2) return 'warn';
+  return 'good';
 }
 function ragComp(techR, plantR, th) {
   if (techR == null || plantR == null) return 'gray';
@@ -346,7 +353,7 @@ function techOverallRag(t, th) {
   return worstOf(
     ragComposite(t.compositeIndex, th),
     ragRevGap(t.weightedRevPerUnit, t.plantAvgRevPerUnit, th),
-    ragLabor(t.avgLaborRatio, th),
+    ragLabor(t.avgLaborRatio, t.plantAvgLaborRatio, th),
     ragComp(t.compRevenueRatio, t.plantAvgCompRatio, th)
   );
 }
@@ -370,8 +377,8 @@ function techAlerts(t, th) {
   if (rc === 'critical') flags.push({ sev: 'critical', label: '綜合戰力指數低於警戒值 (' + fmtNum(t.compositeIndex, 1) + ')' });
   const rv = ragRevGap(t.weightedRevPerUnit, t.plantAvgRevPerUnit, th);
   if (rv !== 'good' && rv !== 'gray') flags.push({ sev: rv, label: '單台營收低於同廠平均 ' + fmtPct((t.plantAvgRevPerUnit - t.weightedRevPerUnit) / t.plantAvgRevPerUnit, 1) });
-  const rl = ragLabor(t.avgLaborRatio, th);
-  if (rl !== 'good' && rl !== 'gray') flags.push({ sev: rl, label: '工資營收占比偏離合理區間 (' + fmtPct(t.avgLaborRatio, 1) + ')' });
+  const rl = ragLabor(t.avgLaborRatio, t.plantAvgLaborRatio, th);
+  if (rl !== 'good' && rl !== 'gray') flags.push({ sev: rl, label: '工資營收占比明顯偏離同廠平均 (' + fmtPct(t.avgLaborRatio, 1) + ' vs ' + fmtPct(t.plantAvgLaborRatio, 1) + ')' });
   const rw = ragComp(t.compRevenueRatio, t.plantAvgCompRatio, th);
   if (rw !== 'good' && rw !== 'gray') flags.push({ sev: rw, label: '補償營收占比明顯高於同廠平均 (' + fmtPct(t.compRevenueRatio, 1) + ' vs ' + fmtPct(t.plantAvgCompRatio, 1) + ')' });
   if (decliningStreak(t, 'count', 2)) flags.push({ sev: 'warn', label: '接車台數連續2個月下滑' });
@@ -529,7 +536,7 @@ function alertGlossary(th) {
   return [
     { title: '綜合戰力指數低於警戒值', desc: '綜合戰力指數低於目前設定的黃燈門檻（' + th.compositeWarn + '）。' },
     { title: '單台營收低於同廠平均 X%', desc: '單台營收低於同廠平均，落差達目前設定門檻（' + th.revGapPct + '%）以上。' },
-    { title: '工資營收占比偏離合理區間', desc: '工資占比超出目前設定的合理區間（' + fmtPct(th.laborLow, 0) + '–' + fmtPct(th.laborHigh, 0) + '）。' },
+    { title: '工資營收占比明顯偏離同廠平均', desc: '工資占比與所屬服務廠平均相差達目前設定門檻（' + th.laborGapPct + ' 個百分點）以上。改用「同廠比較」而非全公司統一區間，是因為不同廠的營收結構（例如外修比重）本來就會使工資占比落在不同水準，用全公司單一標準會誤判整廠的結構差異為個人異常。' },
     { title: '補償營收占比明顯高於同廠平均', desc: '補償營收占總營收比例，比同廠平均高出目前設定門檻（' + th.compGapPct + ' 個百分點）以上，代表該技師業務組成中「非自費」比重明顯偏高，可能影響單台營收的判讀。' },
     { title: '接車台數／單台營收連續2個月下滑', desc: '最近兩個月的數值呈現連續下降趨勢，提醒留意近期表現。' },
     { title: '高年資但綜合戰力低於同年資水準', desc: '年資達到目前設定門檻（' + th.seniorYears + ' 年以上），但綜合戰力指數仍低於黃燈門檻，顯示資深技師績效低於預期。' },
@@ -732,7 +739,7 @@ function GlobalFilterBar({ filters, setFilters, role }) {
   return React.createElement('div', { className: 'filter-bar' },
     !isTech ? React.createElement('div', { className: 'field' }, React.createElement('label', null, '服務廠'),
       React.createElement(Select, {
-        value: filters.plant, onChange: v => set('plant', v), style: role.role === 'plantHead' ? { opacity: .6, pointerEvents: 'none' } : {},
+        value: role.role === 'plantHead' ? role.plant : filters.plant, onChange: v => set('plant', v), style: role.role === 'plantHead' ? { opacity: .6, pointerEvents: 'none' } : {},
         options: [{ value: 'all', label: '全部服務廠' }].concat(PLANT_NAMES.map(p => ({ value: p, label: p })))
       })
     ) : null,
@@ -832,6 +839,12 @@ function OverviewPage({ filteredTechs, filters, thresholds, goTech }) {
       React.createElement(Kpi, { label: '需改善人數', value: counts.type['需改善'] || 0, formatter: fmtInt }),
       React.createElement(Kpi, { label: '異常警示（紅／黃燈）', value: alertCounts.red + ' / ' + alertCounts.yellow, formatter: v => v })
     ),
+    React.createElement('div', { className: 'grid grid-kpi', style: { marginTop: 14 } },
+      React.createElement(Kpi, { label: 'CSI整體滿意度（全公司）', value: mean(TECHS.map(t => t.csiOverall)), formatter: v => fmtNum(v, 3) }),
+      React.createElement(Kpi, { label: 'CSI結帳服務（出納貢獻）', value: mean(TECHS.map(t => t.csiCheckout)), formatter: v => fmtNum(v, 3) }),
+      React.createElement(Kpi, { label: 'CSI 已匹配技師數', value: TECHS.filter(t => t.csi).length + ' / ' + TECHS.length, formatter: v => v })
+    ),
+    React.createElement('p', { className: 'foot-note', style: { marginTop: 6 } }, 'CSI 滿意度資料來源：CSI 服務戰情系統（2025/03–2026/07，17個月），依服務廠＋技師姓名比對加入，不隨上方月份篩選變動。'),
     React.createElement('div', { className: 'grid grid-2', style: { marginTop: 14 } },
       React.createElement('div', { className: 'card' },
         React.createElement('div', { className: 'card-title' }, '各廠單台營收比較', React.createElement('span', { className: 'hint' }, '依目前篩選條件') ),
@@ -862,20 +875,21 @@ function OverviewPage({ filteredTechs, filters, thresholds, goTech }) {
 }
 
 /* ---------------- Plants ---------------- */
-function PlantsPage({ onOpenPlant, thresholds }) {
+function PlantsPage({ onOpenPlant, thresholds, role }) {
   const th = chartTheme();
   const [sortKey, setSortKey] = useState('avgIndex');
-  const withRevenue = useMemo(() => PLANTS.map(p => Object.assign({}, p, { avgMonthlyRevenue: p.avgMonthlyIntake * p.avgRevPerUnit })), []);
+  const visiblePlants = role.role === 'plantHead' ? PLANTS.filter(p => p.name === role.plant) : PLANTS;
+  const withRevenue = useMemo(() => visiblePlants.map(p => Object.assign({}, p, { avgMonthlyRevenue: p.avgMonthlyIntake * p.avgRevPerUnit })), [visiblePlants]);
   const rows = useMemo(() => [...withRevenue].sort((a, b) => (b[sortKey] || 0) - (a[sortKey] || 0)), [withRevenue, sortKey]);
 
   const barData = useMemo(() => ({
-    labels: PLANTS.map(p => p.name),
+    labels: visiblePlants.map(p => p.name),
     datasets: [
-      { label: '月均接車台數', data: PLANTS.map(p => Math.round(p.avgMonthlyIntake)), backgroundColor: th.series[0], borderRadius: 4, maxBarThickness: 22 },
+      { label: '月均接車台數', data: visiblePlants.map(p => Math.round(p.avgMonthlyIntake)), backgroundColor: th.series[0], borderRadius: 4, maxBarThickness: 22 },
     ]
-  }), []);
+  }), [visiblePlants]);
   const barData2 = useMemo(() => ({
-    labels: PLANTS.map(p => p.name),
+    labels: visiblePlants.map(p => p.name),
     datasets: [{ label: '月均營收(元)', data: withRevenue.map(p => Math.round(p.avgMonthlyRevenue)), backgroundColor: th.series[2], borderRadius: 4, maxBarThickness: 22 }]
   }), [withRevenue]);
 
@@ -884,6 +898,7 @@ function PlantsPage({ onOpenPlant, thresholds }) {
     ['core', '核心戰力'], ['highVolume', '高產能'], ['highValue', '高產值'], ['needsImprovement', '需改善'],
     ['coreRate', '核心率'], ['avgMonthlyIntake', '月均接車'], ['avgRevPerUnit', '單台營收'], ['avgMonthlyRevenue', '月均營收'],
     ['avgLaborRatio', '工資比'], ['compRevenueRatio', '補償營收占比'], ['compCount', '補償筆數'],
+    ['csiOverall', 'CSI整體滿意度'], ['csiCheckout', 'CSI結帳(出納)'],
   ];
 
   return React.createElement('div', null,
@@ -911,9 +926,10 @@ function PlantsPage({ onOpenPlant, thresholds }) {
               const isPct = ['coreRate', 'avgLaborRatio', 'compRevenueRatio'].includes(k);
               const isMoney = k === 'avgRevPerUnit' || k === 'avgMonthlyRevenue';
               const isInt = k === 'compCount';
-              const isNum = typeof v === 'number' && !isPct && !isMoney && !isInt;
-              return React.createElement('td', { key: k, className: (isPct || isMoney || isNum || isInt) ? 'num-cell' : '' },
-                isPct ? fmtPct(v, 1) : isMoney ? fmtMoney(v) : isInt ? fmtInt(v) : isNum ? fmtNum(v, 1) : v
+              const isCsi = k === 'csiOverall' || k === 'csiCheckout';
+              const isNum = typeof v === 'number' && !isPct && !isMoney && !isInt && !isCsi;
+              return React.createElement('td', { key: k, className: (isPct || isMoney || isNum || isInt || isCsi) ? 'num-cell' : '' },
+                isPct ? fmtPct(v, 1) : isMoney ? fmtMoney(v) : isInt ? fmtInt(v) : isCsi ? fmtNum(v, 2) : isNum ? fmtNum(v, 1) : v
               );
             })
           )))
@@ -923,7 +939,7 @@ function PlantsPage({ onOpenPlant, thresholds }) {
     React.createElement('div', { className: 'card', style: { marginTop: 14 } },
       React.createElement('div', { className: 'card-title' }, '各廠管理判讀與需改善名單'),
       React.createElement('div', { className: 'grid grid-2' },
-        PLANTS.map(p => React.createElement('div', { key: p.name, style: { padding: '10px 0', borderBottom: '1px solid var(--border)' } },
+        visiblePlants.map(p => React.createElement('div', { key: p.name, style: { padding: '10px 0', borderBottom: '1px solid var(--border)' } },
           React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
             React.createElement('b', null, p.name),
             React.createElement('span', { className: 'badge ' + (p.needsImprovement > 1 ? 'warn' : 'good') }, p.verdict)
@@ -957,8 +973,11 @@ const ROSTER_COLS = [
   { key: 'qualification', label: '戰力資格' },
   { key: 'type', label: '戰力類型' },
   { key: 'plantRank', label: '廠內排名', num: true },
+  { key: 'companyRank', label: '全公司排名', num: true },
+  { key: 'csiOverall', label: 'CSI整體滿意度', fmt: v => fmtNum(v, 2), num: true },
+  { key: 'csiCheckout', label: 'CSI結帳(出納)', fmt: v => fmtNum(v, 2), num: true },
 ];
-const ROSTER_DEFAULT_VISIBLE = ['plant', 'name', 'tenure', 'avgMonthlyIntake', 'weightedRevPerUnit', 'avgMonthlyRevenue', 'avgLaborRatio', 'compRevenueRatio', 'compositeIndex', 'qualification', 'type', 'plantRank'];
+const ROSTER_DEFAULT_VISIBLE = ['plant', 'name', 'tenure', 'avgMonthlyIntake', 'weightedRevPerUnit', 'avgMonthlyRevenue', 'avgLaborRatio', 'compRevenueRatio', 'compositeIndex', 'qualification', 'type', 'plantRank', 'companyRank', 'csiOverall', 'csiCheckout'];
 
 function RosterPage({ filteredTechs, filters, thresholds, goTech }) {
   const [sort, setSort] = useState({ key: 'compositeIndex', dir: -1 });
@@ -1101,6 +1120,7 @@ function TechDetailPage({ techKey: selKey, setTechKey, thresholds, role }) {
         React.createElement('div', { className: 'stat-row' }, React.createElement('span', null, '有效上線月數'), React.createElement('b', null, tech.effectiveMonths)),
         React.createElement('div', { className: 'stat-row' }, React.createElement('span', null, '戰力資格 / 類型'), React.createElement('b', null, tech.qualification + ' · ' + tech.type)),
         React.createElement('div', { className: 'stat-row' }, React.createElement('span', null, '廠內戰力排名'), React.createElement('b', null, '第 ' + tech.plantRank + ' 名')),
+        React.createElement('div', { className: 'stat-row' }, React.createElement('span', null, '全公司戰力排名'), React.createElement('b', null, '第 ' + tech.companyRank + ' / ' + TECHS.length + ' 名')),
         React.createElement('div', { className: 'divider' }),
         React.createElement('div', { className: 'foot-note' }, React.createElement('b', null, '管理判讀：'), tech.verdict)
       ),
@@ -1116,8 +1136,11 @@ function TechDetailPage({ techKey: selKey, setTechKey, thresholds, role }) {
           React.createElement(Kpi, { label: '自費營收占比', value: tech.selfRevenueRatio, formatter: v => fmtPct(v, 1) }),
           React.createElement(Kpi, { label: '補償營收占比', value: tech.compRevenueRatio, formatter: v => fmtPct(v, 1) }),
           React.createElement(Kpi, { label: '補償歸戶筆數', value: tech.compReconciledCount, formatter: fmtInt }),
-          React.createElement(Kpi, { label: '綜合戰力指數', value: tech.compositeIndex, formatter: v => fmtNum(v, 1) })
-        )
+          React.createElement(Kpi, { label: '綜合戰力指數', value: tech.compositeIndex, formatter: v => fmtNum(v, 1) }),
+          React.createElement(Kpi, { label: 'CSI整體滿意度', value: tech.csiOverall, formatter: v => fmtNum(v, 2) }),
+          React.createElement(Kpi, { label: 'CSI結帳服務（出納貢獻）', value: tech.csiCheckout, formatter: v => fmtNum(v, 2) })
+        ),
+        !tech.csi ? React.createElement('p', { className: 'foot-note', style: { marginTop: 8 } }, '＊此技師姓名未能與 CSI 滿意度資料比對成功（可能是姓名寫法差異或無足夠問卷樣本），暫無滿意度數據。') : null
       )
     ),
     React.createElement('div', { className: 'card', style: { marginTop: 14 } },
@@ -1147,6 +1170,7 @@ function TechDetailPage({ techKey: selKey, setTechKey, thresholds, role }) {
 /* ---------------- Tenure analysis ---------------- */
 function TenurePage({ filteredTechs }) {
   const th = chartTheme();
+  const suspiciousTenureCount = filteredTechs.filter(t => t.tenure === 1).length;
   const groups = TENURE_BUCKETS.map(b => {
     const ts = filteredTechs.filter(t => tenureBucketOf(t.tenure) === b.key);
     return {
@@ -1180,6 +1204,12 @@ function TenurePage({ filteredTechs }) {
   });
 
   return React.createElement('div', null,
+    suspiciousTenureCount > 0 ? React.createElement('div', { className: 'card', style: { marginBottom: 14, borderColor: 'var(--warning)' } },
+      React.createElement('div', { style: { display: 'flex', gap: 8, alignItems: 'flex-start' } },
+        React.createElement(RagBadge, { rag: 'warn' }),
+        React.createElement('span', { className: 'foot-note' }, '目前篩選範圍內有 ' + suspiciousTenureCount + ' 位技師的年資「剛好等於 1.0 年」（其餘技師多為 0.7、2.1、24.3 等有小數點的真實數字），高度疑似為到職日期缺失時的預設填補值，而非實際年資。使用本頁的年資分組結果做決策前，建議先與人資系統核對這些技師的到職日期。')
+      )
+    ) : null,
     React.createElement('div', { className: 'card' },
       React.createElement('div', { className: 'card-title' }, '各年資區間平均指數比較'),
       React.createElement(ChartCanvas, { type: 'bar', data: barData, height: 320 })
@@ -1330,6 +1360,8 @@ const RANK_METRICS = [
   { key: 'compRevenue', label: '補償營收（區間累計）', get: (t, f) => techCompRevenue(t, f.from, f.to), fmt: fmtMoney },
   { key: 'composite', label: '綜合戰力指數（達成率）', get: t => t.compositeIndex, fmt: v => fmtNum(v, 1) },
   { key: 'growth', label: '成長幅度（近2月 vs 前2月）', get: t => growthRate(t), fmt: v => v == null ? '—' : (v * 100).toFixed(1) + '%' },
+  { key: 'csiOverall', label: 'CSI整體滿意度', get: t => t.csiOverall, fmt: v => fmtNum(v, 2) },
+  { key: 'csiCheckout', label: 'CSI結帳服務（出納貢獻）', get: t => t.csiCheckout, fmt: v => fmtNum(v, 2) },
 ];
 function growthRate(t) {
   const ms = availableMonths(t);
@@ -1345,6 +1377,7 @@ function RankingPage({ filteredTechs, filters, thresholds, goTech }) {
   const [metricKey, setMetricKey] = useState('revenue');
   const [dir, setDir] = useState(-1);
   const [tab, setTab] = useState('ranking');
+  const [alertFilter, setAlertFilter] = useState('all');
   const metric = RANK_METRICS.find(m => m.key === metricKey);
 
   const ranked = useMemo(() => {
@@ -1352,17 +1385,30 @@ function RankingPage({ filteredTechs, filters, thresholds, goTech }) {
       .sort((a, b) => (a.v - b.v) * dir).slice(0, 10);
   }, [filteredTechs, metricKey, dir, filters]);
 
-  const alertRows = useMemo(() => filteredTechs.map(t => ({ t, flags: techAlerts(t, thresholds) }))
-    .filter(x => x.flags.length).sort((a, b) => {
-      const sevScore = f => f.flags.reduce((s, x) => s + SEV_RANK[x.sev], 0);
-      return sevScore(b) - sevScore(a);
-    }), [filteredTechs, thresholds]);
+  const isTrendOnlyFlag = f => f.sev === 'warn' && f.label.includes('連續2個月下滑');
+  const allAlertRows = useMemo(() => filteredTechs.map(t => {
+    const flags = techAlerts(t, thresholds);
+    const hasHardBreach = flags.some(f => f.sev === 'critical' || (f.sev === 'warn' && !isTrendOnlyFlag(f)));
+    const hasTrendOnly = flags.some(isTrendOnlyFlag);
+    const hasGray = flags.some(f => f.sev === 'gray');
+    return { t, flags, hasHardBreach, hasTrendOnly, hasGray };
+  }).filter(x => x.flags.length).sort((a, b) => {
+    const sevScore = f => f.flags.reduce((s, x) => s + SEV_RANK[x.sev], 0);
+    return sevScore(b) - sevScore(a);
+  }), [filteredTechs, thresholds]);
+
+  const alertRows = useMemo(() => allAlertRows.filter(r => {
+    if (alertFilter === 'hard') return r.hasHardBreach;
+    if (alertFilter === 'trend') return !r.hasHardBreach && r.hasTrendOnly;
+    if (alertFilter === 'gray') return r.hasGray && !r.hasHardBreach;
+    return true;
+  }), [allAlertRows, alertFilter]);
 
   return React.createElement('div', null,
     React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 } },
       React.createElement('div', { className: 'tabs', style: { marginBottom: 0, border: 'none' } },
         React.createElement('div', { className: 'tab' + (tab === 'ranking' ? ' active' : ''), onClick: () => setTab('ranking') }, '排行榜'),
-        React.createElement('div', { className: 'tab' + (tab === 'alerts' ? ' active' : ''), onClick: () => setTab('alerts') }, '異常提醒清單 (' + alertRows.length + ')')
+        React.createElement('div', { className: 'tab' + (tab === 'alerts' ? ' active' : ''), onClick: () => setTab('alerts') }, '異常提醒清單 (' + allAlertRows.length + ')')
       ),
       React.createElement(GlossaryButton, { thresholds })
     ),
@@ -1384,16 +1430,30 @@ function RankingPage({ filteredTechs, filters, thresholds, goTech }) {
           )
         )
       )
-    ) : React.createElement('div', { className: 'card' },
-      alertRows.length ? React.createElement('div', { className: 'flag-list' },
-        alertRows.map(({ t, flags }) => React.createElement('div', { key: techKey(t), className: 'flag-row', onClick: () => goTech(techKey(t)), style: { cursor: 'pointer', flexDirection: 'column', alignItems: 'stretch' } },
-          React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between' } },
-            React.createElement('b', null, t.plant + ' · ' + t.name),
-            React.createElement(RagBadge, { rag: techOverallRag(t, thresholds) })
-          ),
-          React.createElement('ul', { style: { margin: '4px 0 0 18px', padding: 0 } }, flags.map((f, i) => React.createElement('li', { key: i }, f.label)))
-        ))
-      ) : React.createElement('div', { className: 'empty-state' }, '目前篩選範圍內沒有異常提醒。')
+    ) : React.createElement(React.Fragment, null,
+      React.createElement('div', { className: 'filter-bar', style: { marginTop: 0, marginBottom: 12 } },
+        React.createElement('div', { className: 'field' }, React.createElement('label', null, '顯示範圍'),
+          React.createElement(Select, {
+            value: alertFilter, onChange: setAlertFilter, options: [
+              { value: 'all', label: '全部 (' + allAlertRows.length + ')' },
+              { value: 'hard', label: '門檻異常，優先處理 (' + allAlertRows.filter(r => r.hasHardBreach).length + ')' },
+              { value: 'trend', label: '僅趨勢下滑提醒 (' + allAlertRows.filter(r => !r.hasHardBreach && r.hasTrendOnly).length + ')' },
+              { value: 'gray', label: '僅資料不足 (' + allAlertRows.filter(r => r.hasGray && !r.hasHardBreach).length + ')' },
+            ]
+          })
+        )
+      ),
+      React.createElement('div', { className: 'card' },
+        alertRows.length ? React.createElement('div', { className: 'flag-list' },
+          alertRows.map(({ t, flags }) => React.createElement('div', { key: techKey(t), className: 'flag-row', onClick: () => goTech(techKey(t)), style: { cursor: 'pointer', flexDirection: 'column', alignItems: 'stretch' } },
+            React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between' } },
+              React.createElement('b', null, t.plant + ' · ' + t.name),
+              React.createElement(RagBadge, { rag: techOverallRag(t, thresholds) })
+            ),
+            React.createElement('ul', { style: { margin: '4px 0 0 18px', padding: 0 } }, flags.map((f, i) => React.createElement('li', { key: i }, f.label)))
+          ))
+        ) : React.createElement('div', { className: 'empty-state' }, '此篩選範圍內沒有異常提醒。')
+      )
     )
   );
 }
@@ -1422,7 +1482,7 @@ function ImportPage() {
     const reader = new FileReader();
     reader.onload = e => {
       try {
-        const wb = XLSX.read(e.target.result, { type: 'binary' });
+        const wb = XLSX.read(e.target.result, { type: 'array' });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const json = XLSX.utils.sheet_to_json(ws, { defval: null });
         const hdrs = json.length ? Object.keys(json[0]) : [];
@@ -1430,7 +1490,7 @@ function ImportPage() {
       } catch (err) { alert('檔案解析失敗：' + err.message); }
       setBusy(false);
     };
-    reader.readAsBinaryString(file);
+    reader.readAsArrayBuffer(file);
   }
 
   const validation = useMemo(() => {
@@ -1497,8 +1557,7 @@ function SettingsPage({ thresholds, setThresholds }) {
   function set(k, v) { setLocal(l => Object.assign({}, l, { [k]: v })); }
   const fields = [
     ['revGapPct', '單台營收低於同廠平均 (%) → 觸發異常', 1],
-    ['laborLow', '工資占比合理下限', 0.01],
-    ['laborHigh', '工資占比合理上限', 0.01],
+    ['laborGapPct', '工資占比偏離同廠平均 (百分點) → 觸發異常', 0.5],
     ['compGapPct', '補償營收占比高於同廠平均 (百分點) → 觸發異常', 0.5],
     ['compositeGreen', '綜合戰力指數 綠燈門檻（≥）', 1],
     ['compositeWarn', '綜合戰力指數 黃燈門檻（≥）', 1],
