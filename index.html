@@ -895,14 +895,14 @@ function PlantsPage({ onOpenPlant, thresholds, role, filteredTechs, filters }) {
 
   const monthCount = filters.to - filters.from + 1;
   const techRows = useMemo(() => {
-    const list = filteredTechs.map(t => ({
+    return filteredTechs.map(t => ({
       label: t.plant + ' · ' + t.name,
+      plantIdx: PLANT_NAMES.indexOf(t.plant),
+      name: t.name,
       intake: t.avgMonthlyIntake,
       revenue: monthCount > 0 ? techTotalRevenue(t, filters.from, filters.to) / monthCount : null,
-    })).sort((a, b) => a.label.localeCompare(b.label));
-    const capped = filters.plant === 'all' ? [...list].sort((a, b) => (b.intake || 0) - (a.intake || 0)).slice(0, 30) : list;
-    return filters.plant === 'all' ? capped.sort((a, b) => a.label.localeCompare(b.label)) : list;
-  }, [filteredTechs, filters.from, filters.to, filters.plant]);
+    })).sort((a, b) => (a.plantIdx - b.plantIdx) || a.name.localeCompare(b.name));
+  }, [filteredTechs, filters.from, filters.to]);
   const techChartHeight = Math.max(320, techRows.length * 24);
   const techIntakeData = { labels: techRows.map(r => r.label), datasets: [{ label: '月均接車台數', data: techRows.map(r => r.intake == null ? null : Math.round(r.intake)), backgroundColor: th.series[0], borderRadius: 3, maxBarThickness: 18 }] };
   const techRevenueData = { labels: techRows.map(r => r.label), datasets: [{ label: '月均營收(元)', data: techRows.map(r => r.revenue == null ? null : Math.round(r.revenue)), backgroundColor: th.series[2], borderRadius: 3, maxBarThickness: 18 }] };
@@ -951,7 +951,7 @@ function PlantsPage({ onOpenPlant, thresholds, role, filteredTechs, filters }) {
       )
     ),
     React.createElement('div', { className: 'card', style: { marginTop: 14 } },
-      React.createElement('div', { className: 'card-title' }, '各廠技師｜月均接車台數', React.createElement('span', { className: 'hint' }, filters.plant === 'all' ? '全部服務廠時僅顯示台數前30名，選擇單一服務廠可看到該廠全部技師' : filters.plant + '全部技師')),
+      React.createElement('div', { className: 'card-title' }, '各廠技師｜月均接車台數', React.createElement('span', { className: 'hint' }, filters.plant === 'all' ? '全部服務廠、全部 ' + techRows.length + ' 位技師，依廠別排列（可於上方篩選單一服務廠）' : filters.plant + '全部技師')),
       techRows.length ? React.createElement(ChartCanvas, { type: 'bar', data: techIntakeData, height: techChartHeight, options: { indexAxis: 'y', plugins: { legend: { display: false } } } }) : React.createElement('div', { className: 'empty-state' }, '目前篩選範圍內沒有技師資料。')
     ),
     React.createElement('div', { className: 'card', style: { marginTop: 14 } },
