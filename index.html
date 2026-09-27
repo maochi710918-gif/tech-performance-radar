@@ -248,6 +248,18 @@ const PLANTS = DATA.plants.filter(p => p.techCount > 0);
 const PLANT_NAMES = PLANTS.map(p => p.name);
 const OVERALL = DATA.overall;
 
+// derive revenue-composition ratios once, from the real 自費／補償 breakdown
+PLANTS.forEach(p => { p.compRevenueRatio = p.totalRevenue8 > 0 ? p.compRevenue / p.totalRevenue8 : null; });
+function plantCompRatio(plantName) { const p = PLANTS.find(x => x.name === plantName); return p ? p.compRevenueRatio : null; }
+TECHS.forEach(t => {
+  t.compRevenueRatio = t.totalRevenue > 0 ? t.compRevenueSum / t.totalRevenue : null;
+  t.selfRevenueRatio = t.totalRevenue > 0 ? t.selfRevenueSum / t.totalRevenue : null;
+  t.partsSum = (t.selfPartsSum || 0) + (t.compPartsSum || 0);
+  t.partsRatio = t.totalRevenue > 0 ? t.partsSum / t.totalRevenue : null;
+  t.externalRatio = t.totalRevenue > 0 ? t.selfExternalSum / t.totalRevenue : null;
+  t.plantAvgCompRatio = plantCompRatio(t.plant);
+});
+
 const TENURE_BUCKETS = [
   { key: 'lt1', label: '未滿1年', test: t => t < 1 },
   { key: '1-3', label: '1–3年', test: t => t >= 1 && t < 3 },
@@ -258,21 +270,12 @@ const TENURE_BUCKETS = [
 ];
 const tenureBucketOf = t => (TENURE_BUCKETS.find(b => b.test(t)) || {}).key;
 
-const MILEAGE_BUCKETS = [
-  { key: 'm0_1', label: '0–1萬公里' },
-  { key: 'm1_3', label: '1–3萬公里' },
-  { key: 'm3_5', label: '3–5萬公里' },
-  { key: 'm5_10', label: '5–10萬公里' },
-  { key: 'm10up', label: '10萬公里以上' },
-];
-const MILEAGE_MID = { m0_1: 5000, m1_3: 20000, m3_5: 40000, m5_10: 75000, m10up: 130000 };
-
 const TYPE_OPTIONS = ['核心戰力', '高產能', '高產值', '需改善', '觀察期'];
 const QUAL_OPTIONS = ['正式戰力', '觀察期'];
 
 const DEFAULT_THRESHOLDS = {
-  revGapPct: 10, laborLow: 0.24, laborHigh: 0.32,
-  warrantyGapPct: 20, compositeGreen: 100, compositeWarn: 90,
+  revGapPct: 10, laborLow: 0.16, laborHigh: 0.22,
+  compGapPct: 3, compositeGreen: 100, compositeWarn: 90,
   seniorYears: 10, newHireYears: 1,
 };
 
@@ -281,7 +284,6 @@ const fmtInt = v => (v == null || isNaN(v)) ? '—' : Math.round(v).toLocaleStri
 const fmtMoney = v => (v == null || isNaN(v)) ? '—' : 'NT$' + Math.round(v).toLocaleString('zh-Hant-TW');
 const fmtPct = (v, d) => (v == null || isNaN(v)) ? '—' : (v * 100).toFixed(d == null ? 1 : d) + '%';
 const fmtNum = (v, d) => (v == null || isNaN(v)) ? '—' : v.toFixed(d == null ? 1 : d);
-const fmtKm = v => (v == null || isNaN(v)) ? '—' : Math.round(v).toLocaleString('zh-Hant-TW') + ' km';
 
 /* ---------------- data access helpers ---------------- */
 function techKey(t) { return t.plant + '|' + t.name; }
@@ -295,44 +297,12 @@ function sumField(t, field, from, to) {
   }
   return any ? s : null;
 }
-function techTotalIntake(t, from, to) { return sumField(t, 'total_count', from, to) || 0; }
-function techTotalRevenue(t, from, to) {
-  let s = 0, any = false;
-  for (let m = from; m <= to; m++) {
-    const r = techMonthly(t, m);
-    if (r && typeof r.total_count === 'number' && typeof r.rev_per_unit === 'number') { s += r.total_count * r.rev_per_unit; any = true; }
-  }
-  return any ? s : 0;
-}
-function techAvgRevPerUnit(t, from, to) {
-  const intake = techTotalIntake(t, from, to), rev = techTotalRevenue(t, from, to);
-  return intake > 0 ? rev / intake : null;
-}
-function techWeighted(t, field, from, to) {
-  let num = 0, den = 0;
-  for (let m = from; m <= to; m++) {
-    const r = techMonthly(t, m);
-    if (r && typeof r.total_count === 'number' && typeof r[field] === 'number') { num += r[field] * r.total_count; den += r.total_count; }
-  }
-  return den > 0 ? num / den : null;
-}
-function techMileageSums(t, from, to) {
-  const out = { m0_1: 0, m1_3: 0, m3_5: 0, m5_10: 0, m10up: 0 };
-  for (let m = from; m <= to; m++) {
-    const r = techMonthly(t, m);
-    if (!r) continue;
-    MILEAGE_BUCKETS.forEach(b => { if (typeof r[b.key] === 'number') out[b.key] += r[b.key]; });
-  }
-  return out;
-}
-function techAvgMileage(t, from, to) {
-  const sums = techMileageSums(t, from, to);
-  let total = 0, weighted = 0;
-  Object.keys(sums).forEach(k => { total += sums[k]; weighted += sums[k] * MILEAGE_MID[k]; });
-  return total > 0 ? weighted / total : null;
-}
+function techTotalIntake(t, from, to) { return sumField(t, 'count', from, to) || 0; }
+function techTotalRevenue(t, from, to) { return sumField(t, 'total_revenue', from, to) || 0; }
+function techCompRevenue(t, from, to) { return sumField(t, 'comp_revenue', from, to) || 0; }
+function techSelfRevenue(t, from, to) { return sumField(t, 'self_revenue', from, to) || 0; }
 function availableMonths(t) {
-  return MONTHS.filter(m => { const r = techMonthly(t, m); return r && typeof r.total_count === 'number'; });
+  return MONTHS.filter(m => { const r = techMonthly(t, m); return r && typeof r.count === 'number'; });
 }
 
 /* ---------------- RAG logic ---------------- */
@@ -356,11 +326,11 @@ function ragLabor(ratio, th) {
   if (ratio >= th.laborLow - buf && ratio <= th.laborHigh + buf) return 'warn';
   return 'critical';
 }
-function ragWarranty(techR, plantR, th) {
-  if (techR == null || !plantR) return 'gray';
-  const rel = (techR - plantR) / plantR * 100;
-  if (rel >= th.warrantyGapPct) return 'critical';
-  if (rel >= th.warrantyGapPct / 2) return 'warn';
+function ragComp(techR, plantR, th) {
+  if (techR == null || plantR == null) return 'gray';
+  const gapPts = (techR - plantR) * 100;
+  if (gapPts >= th.compGapPct) return 'critical';
+  if (gapPts >= th.compGapPct / 2) return 'warn';
   return 'good';
 }
 const SEV_RANK = { critical: 3, warn: 2, good: 1, gray: 0 };
@@ -377,7 +347,7 @@ function techOverallRag(t, th) {
     ragComposite(t.compositeIndex, th),
     ragRevGap(t.weightedRevPerUnit, t.plantAvgRevPerUnit, th),
     ragLabor(t.avgLaborRatio, th),
-    ragWarranty(t.warrantyRatio, t.plantAvgWarrantyRatio, th)
+    ragComp(t.compRevenueRatio, t.plantAvgCompRatio, th)
   );
 }
 
@@ -402,9 +372,9 @@ function techAlerts(t, th) {
   if (rv !== 'good' && rv !== 'gray') flags.push({ sev: rv, label: '單台營收低於同廠平均 ' + fmtPct((t.plantAvgRevPerUnit - t.weightedRevPerUnit) / t.plantAvgRevPerUnit, 1) });
   const rl = ragLabor(t.avgLaborRatio, th);
   if (rl !== 'good' && rl !== 'gray') flags.push({ sev: rl, label: '工資營收占比偏離合理區間 (' + fmtPct(t.avgLaborRatio, 1) + ')' });
-  const rw = ragWarranty(t.warrantyRatio, t.plantAvgWarrantyRatio, th);
-  if (rw !== 'good' && rw !== 'gray') flags.push({ sev: rw, label: '保固車占比明顯高於同廠平均 (' + fmtPct(t.warrantyRatio, 1) + ' vs ' + fmtPct(t.plantAvgWarrantyRatio, 1) + ')' });
-  if (decliningStreak(t, 'total_count', 2)) flags.push({ sev: 'warn', label: '接車台數連續2個月下滑' });
+  const rw = ragComp(t.compRevenueRatio, t.plantAvgCompRatio, th);
+  if (rw !== 'good' && rw !== 'gray') flags.push({ sev: rw, label: '補償營收占比明顯高於同廠平均 (' + fmtPct(t.compRevenueRatio, 1) + ' vs ' + fmtPct(t.plantAvgCompRatio, 1) + ')' });
+  if (decliningStreak(t, 'count', 2)) flags.push({ sev: 'warn', label: '接車台數連續2個月下滑' });
   if (decliningStreak(t, 'rev_per_unit', 2)) flags.push({ sev: 'warn', label: '單台營收連續2個月下滑' });
   if (t.tenure >= th.seniorYears && t.compositeIndex != null && t.compositeIndex < th.compositeWarn) {
     flags.push({ sev: 'critical', label: '高年資（' + fmtNum(t.tenure, 1) + '年）但綜合戰力低於同年資水準' });
@@ -545,21 +515,22 @@ const METRIC_GLOSSARY = [
   { title: '接車產能指數', desc: '技師月均接車台數 ÷ 同廠正式戰力平均月接車台數 × 100，數值愈高代表接車量相對同廠愈高。' },
   { title: '單車產值指數', desc: '技師加權單台營收 ÷ 同廠正式戰力平均單台營收 × 100，反映每台車創造營收的相對水準。' },
   { title: '工資能力指數', desc: '技師平均工資占比 ÷ 同廠平均工資占比 × 100。原始資料無出勤／銷售工時欄位，故以此指數作為「工時效率」的代理指標。' },
-  { title: '單台營收', desc: '（總營收 ÷ 完工台數）。畫面上呈現的是依各月接車台數加權平均後的「加權單台營收」，避免單月台數過少造成失真。' },
-  { title: '台數', desc: '進廠／完工的車輛數量（以工單為單位計數），例如「月均接車台數」代表平均每個月進廠的車輛數，是實際的車輛數量，不是金額。' },
+  { title: '單台營收', desc: '（自費營收＋補償營收）÷ 進廠台次。每月直接依當月實績計算，1–8月整體則採「加權單台營收」（依各有效月台次加權），避免單月台數過少造成失真。' },
+  { title: '台數（進廠台次）', desc: '205系統中每筆自費／補償明細計 1 台次；同一輛車同月若實際進廠 2 次，計 2 台次。是實際車輛進廠次數，不是金額。' },
   { title: '月均營收', desc: '該廠／該技師「每個月」創造的總營收平均值 ＝ 月均接車台數 × 單台營收。與「單台營收」不同：單台營收是每一台車的平均產值，月均營收則是整體月營收規模，兩者相乘的關係可用來判斷是靠「量多」還是「單台產值高」創造營收。' },
-  { title: '工資營收占比', desc: '工資收入 ÷ 總營收 × 100%。用來檢視營收結構中工資的占比是否合理。' },
-  { title: '保固車占比', desc: '保固車台數 ÷ 總完工台數 × 100%（保固定義：施作當日距新車保固起 ≤ 3 年，且進廠里程 ≤ 10 萬公里）。' },
-  { title: '月均', desc: '所選「分析區間」內的加總數值 ÷ 區間內月數，用來排除月份長短或半月資料造成的比較失真，方便跨區間比較。' },
-  { title: '戰力資格（正式戰力／觀察期）', desc: '有效上線月數達 3 個月以上才列入「正式戰力」比較基準；未滿 3 個月列為「觀察期」，暫不納入同廠平均計算。' },
-  { title: '戰力類型（核心戰力／高產能／高產值／需改善）', desc: '依接車產能、單車產值、工資能力三項指數相對同廠水準，綜合判讀出的分類標籤，用於快速辨識技師的戰力特徵。' },
+  { title: '工資營收占比', desc: '（自費工資＋補償工資）÷ 總營收 × 100%。用來檢視營收結構中工資的占比是否合理。' },
+  { title: '自費營收 / 補償營收', desc: '自費營收是客戶自行付費的維修營收；補償營收是原廠／保固體系補償技師的營收（不向客戶收費）。兩者相加＝總營收。補償營收占比可視為「非自費」業務的相對指標。' },
+  { title: '零件 / 外修', desc: '零件＝自費與補償維修中使用的零件費用；外修（外修合計）僅出現在自費項目中，指外包給廠外的鈑金／烤漆等項目費用。三者（工資、零件、外修）合計即為總營收。' },
+  { title: '月均', desc: '所選「分析區間」內的加總數值 ÷ 區間內月數，用來排除月份長短造成的比較失真，方便跨區間比較。' },
+  { title: '戰力資格（正式戰力／觀察期）', desc: '1–8月有效上線月份達 3 個月以上才列入「正式戰力」比較基準；未滿 3 個月列為「觀察期」，暫不納入同廠平均計算。' },
+  { title: '戰力類型（核心戰力／高產能／高產值／需改善）', desc: '產能、產值皆≥100為核心戰力；僅產能≥100為高產能；僅產值≥100為高產值；兩者皆<100為需改善。用於快速辨識技師的戰力特徵。' },
 ];
 function alertGlossary(th) {
   return [
     { title: '綜合戰力指數低於警戒值', desc: '綜合戰力指數低於目前設定的黃燈門檻（' + th.compositeWarn + '）。' },
     { title: '單台營收低於同廠平均 X%', desc: '單台營收低於同廠平均，落差達目前設定門檻（' + th.revGapPct + '%）以上。' },
     { title: '工資營收占比偏離合理區間', desc: '工資占比超出目前設定的合理區間（' + fmtPct(th.laborLow, 0) + '–' + fmtPct(th.laborHigh, 0) + '）。' },
-    { title: '保固車占比明顯高於同廠平均', desc: '保固車占比相對同廠平均高出目前設定門檻（' + th.warrantyGapPct + '%）以上，可能影響單台營收的判讀。' },
+    { title: '補償營收占比明顯高於同廠平均', desc: '補償營收占總營收比例，比同廠平均高出目前設定門檻（' + th.compGapPct + ' 個百分點）以上，代表該技師業務組成中「非自費」比重明顯偏高，可能影響單台營收的判讀。' },
     { title: '接車台數／單台營收連續2個月下滑', desc: '最近兩個月的數值呈現連續下降趨勢，提醒留意近期表現。' },
     { title: '高年資但綜合戰力低於同年資水準', desc: '年資達到目前設定門檻（' + th.seniorYears + ' 年以上），但綜合戰力指數仍低於黃燈門檻，顯示資深技師績效低於預期。' },
     { title: '新進技師績效成長速度低於預期', desc: '到職未滿目前設定年限（' + th.newHireYears + ' 年），但綜合戰力指數尚未達到黃燈門檻，顯示上手速度偏慢。' },
@@ -580,7 +551,8 @@ function GlossaryModal({ thresholds, onClose }) {
         React.createElement('b', null, g.title), React.createElement('span', { className: 'foot-note' }, g.desc)
       ))
     ),
-    React.createElement('p', { className: 'foot-note', style: { marginTop: 14 } }, '燈號說明：', React.createElement(RagBadge, { rag: 'good' }), ' 達標　', React.createElement(RagBadge, { rag: 'warn' }), ' 接近門檻　', React.createElement(RagBadge, { rag: 'critical' }), ' 異常　', React.createElement(RagBadge, { rag: 'gray' }), ' 無資料。門檻值可於「指標與門檻設定」頁調整。')
+    React.createElement('p', { className: 'foot-note', style: { marginTop: 14 } }, '燈號說明：', React.createElement(RagBadge, { rag: 'good' }), ' 達標　', React.createElement(RagBadge, { rag: 'warn' }), ' 接近門檻　', React.createElement(RagBadge, { rag: 'critical' }), ' 異常　', React.createElement(RagBadge, { rag: 'gray' }), ' 無資料。門檻值可於「指標與門檻設定」頁調整。'),
+    React.createElement('p', { className: 'foot-note', style: { marginTop: 8 } }, '資料來源：', DATA.meta.sourceFile, '。本次資料為自費／補償實績財務資料，不含進廠里程與保固判定欄位，故戰力分析僅以接車產能、單車產值、工資能力三項組成，不做里程／保固結構校正。')
   );
 }
 function GlossaryButton({ thresholds }) {
@@ -616,23 +588,20 @@ function filterTechs(techs, f, skipDims) {
 
 /* ---------------- aggregate KPI builder ---------------- */
 function aggregateForPeriod(techs, month) {
-  const from = month, to = month;
-  let intake = 0, revenue = 0, laborNum = 0, laborDen = 0, warrantyNum = 0, warrantyDen = 0, mileageNum = 0, mileageDen = 0;
+  let intake = 0, revenue = 0, compRevenue = 0, laborNum = 0, laborDen = 0;
   techs.forEach(t => {
     const r = techMonthly(t, month);
-    if (!r || typeof r.total_count !== 'number') return;
-    intake += r.total_count;
-    if (typeof r.rev_per_unit === 'number') revenue += r.total_count * r.rev_per_unit;
-    if (typeof r.labor_ratio === 'number') { laborNum += r.labor_ratio * r.total_count; laborDen += r.total_count; }
-    if (typeof r.warranty_ratio === 'number') { warrantyNum += r.warranty_ratio * r.total_count; warrantyDen += r.total_count; }
-    MILEAGE_BUCKETS.forEach(b => { if (typeof r[b.key] === 'number') { mileageNum += r[b.key] * MILEAGE_MID[b.key]; mileageDen += r[b.key]; } });
+    if (!r || typeof r.count !== 'number') return;
+    intake += r.count;
+    if (typeof r.total_revenue === 'number') revenue += r.total_revenue;
+    if (typeof r.comp_revenue === 'number') compRevenue += r.comp_revenue;
+    if (typeof r.labor_ratio === 'number') { laborNum += r.labor_ratio * r.count; laborDen += r.count; }
   });
   return {
-    techCount: techs.length, intake, revenue,
+    techCount: techs.length, intake, revenue, compRevenue,
     avgRevPerUnit: intake > 0 ? revenue / intake : null,
     avgLaborRatio: laborDen > 0 ? laborNum / laborDen : null,
-    avgWarrantyRatio: warrantyDen > 0 ? warrantyNum / warrantyDen : null,
-    avgMileage: mileageDen > 0 ? mileageNum / mileageDen : null,
+    avgCompRatio: revenue > 0 ? compRevenue / revenue : null,
   };
 }
 function deltaPct(cur, prev) { if (cur == null || prev == null || prev === 0) return null; return (cur - prev) / Math.abs(prev); }
@@ -749,7 +718,7 @@ function App() {
     React.createElement('div', { className: 'main' },
       React.createElement('div', { className: 'topbar' },
         React.createElement('div', { className: 'page-title' }, titleMap[page]),
-        React.createElement('div', { className: 'page-sub' }, '2026年 各廠技師戰力分析｜同廠正式戰力平均基準 = 100｜資料含 ' + PLANTS.length + ' 廠、' + OVERALL['總技師數'] + ' 位技師｜1–8月完整月份（9月資料僅至9/15，暫不納入）'),
+        React.createElement('div', { className: 'page-sub' }, '2026年1–8月 技師戰力分析｜同廠正式戰力平均基準 = 100｜資料含 ' + PLANTS.length + ' 廠、' + OVERALL['總技師數'] + ' 位技師｜自費／補償財務實績（205系統）'),
         (page !== 'settings' && page !== 'roles' && page !== 'import') ? React.createElement(GlobalFilterBar, { filters, setFilters, role }) : null
       ),
       React.createElement('div', { className: 'content' }, pageEl)
@@ -849,14 +818,13 @@ function OverviewPage({ filteredTechs, filters, thresholds, goTech }) {
     React.createElement('div', { className: 'grid grid-kpi' },
       React.createElement(Kpi, { label: '技師人數（篩選範圍）', value: filteredTechs.length, formatter: fmtInt }),
       React.createElement(Kpi, { label: MONTH_LABELS[filters.kpiMonth - 1] + ' 接車台數', value: cur.intake, prevValue: prev.intake, deltaPct: deltaPct(cur.intake, prev.intake), formatter: fmtInt }),
-      React.createElement(Kpi, { label: MONTH_LABELS[filters.kpiMonth - 1] + ' 估算總營收', value: cur.revenue, prevValue: prev.revenue, deltaPct: deltaPct(cur.revenue, prev.revenue), formatter: fmtMoney }),
+      React.createElement(Kpi, { label: MONTH_LABELS[filters.kpiMonth - 1] + ' 總營收', value: cur.revenue, prevValue: prev.revenue, deltaPct: deltaPct(cur.revenue, prev.revenue), formatter: fmtMoney }),
       React.createElement(Kpi, { label: '平均單台營收', value: cur.avgRevPerUnit, prevValue: prev.avgRevPerUnit, deltaPct: deltaPct(cur.avgRevPerUnit, prev.avgRevPerUnit), formatter: fmtMoney }),
       React.createElement(Kpi, { label: '工資營收占比', value: cur.avgLaborRatio, prevValue: prev.avgLaborRatio, deltaPct: deltaPct(cur.avgLaborRatio, prev.avgLaborRatio), formatter: v => fmtPct(v, 1) }),
-      React.createElement(Kpi, { label: '保固車占比', value: cur.avgWarrantyRatio, prevValue: prev.avgWarrantyRatio, deltaPct: deltaPct(cur.avgWarrantyRatio, prev.avgWarrantyRatio), higherIsBetter: false, formatter: v => fmtPct(v, 1) }),
-      React.createElement(Kpi, { label: '平均進廠里程（估）', value: cur.avgMileage, prevValue: prev.avgMileage, deltaPct: deltaPct(cur.avgMileage, prev.avgMileage), higherIsBetter: null, formatter: fmtKm }),
+      React.createElement(Kpi, { label: '補償營收占比', value: cur.avgCompRatio, prevValue: prev.avgCompRatio, deltaPct: deltaPct(cur.avgCompRatio, prev.avgCompRatio), higherIsBetter: false, formatter: v => fmtPct(v, 1) }),
       React.createElement(Kpi, { label: '分析區間累計台數', value: cumulative.intake, formatter: fmtInt }),
       React.createElement(Kpi, { label: '月均接車台數', value: cumulative.avgIntake, formatter: v => fmtNum(v, 1) }),
-      React.createElement(Kpi, { label: '月均估算營收', value: cumulative.avgRevenue, formatter: fmtMoney })
+      React.createElement(Kpi, { label: '月均營收', value: cumulative.avgRevenue, formatter: fmtMoney })
     ),
     React.createElement('div', { className: 'grid grid-kpi', style: { marginTop: 14 } },
       React.createElement(Kpi, { label: '正式戰力／觀察期', value: (counts.qual['正式戰力'] || 0) + ' / ' + (counts.qual['觀察期'] || 0), formatter: v => v }),
@@ -915,7 +883,7 @@ function PlantsPage({ onOpenPlant, thresholds }) {
     ['name', '廠別'], ['techCount', '技師數'], ['formal', '正式戰力'], ['observation', '觀察期'],
     ['core', '核心戰力'], ['highVolume', '高產能'], ['highValue', '高產值'], ['needsImprovement', '需改善'],
     ['coreRate', '核心率'], ['avgMonthlyIntake', '月均接車'], ['avgRevPerUnit', '單台營收'], ['avgMonthlyRevenue', '月均營收'],
-    ['avgLaborRatio', '工資比'], ['pct10wUp', '10萬以上%'], ['warrantyRatio', '保固車占比'],
+    ['avgLaborRatio', '工資比'], ['compRevenueRatio', '補償營收占比'], ['compCount', '補償筆數'],
   ];
 
   return React.createElement('div', null,
@@ -940,11 +908,12 @@ function PlantsPage({ onOpenPlant, thresholds }) {
           React.createElement('tbody', null, rows.map(p => React.createElement('tr', { key: p.name, onClick: () => onOpenPlant(p.name) },
             cols.map(([k]) => {
               let v = p[k];
-              const isPct = ['coreRate', 'avgLaborRatio', 'pct10wUp', 'warrantyRatio'].includes(k);
+              const isPct = ['coreRate', 'avgLaborRatio', 'compRevenueRatio'].includes(k);
               const isMoney = k === 'avgRevPerUnit' || k === 'avgMonthlyRevenue';
-              const isNum = typeof v === 'number' && !isPct && !isMoney;
-              return React.createElement('td', { key: k, className: (isPct || isMoney || isNum) ? 'num-cell' : '' },
-                isPct ? fmtPct(v, 1) : isMoney ? fmtMoney(v) : isNum ? fmtNum(v, 1) : v
+              const isInt = k === 'compCount';
+              const isNum = typeof v === 'number' && !isPct && !isMoney && !isInt;
+              return React.createElement('td', { key: k, className: (isPct || isMoney || isNum || isInt) ? 'num-cell' : '' },
+                isPct ? fmtPct(v, 1) : isMoney ? fmtMoney(v) : isInt ? fmtInt(v) : isNum ? fmtNum(v, 1) : v
               );
             })
           )))
@@ -959,7 +928,7 @@ function PlantsPage({ onOpenPlant, thresholds }) {
             React.createElement('b', null, p.name),
             React.createElement('span', { className: 'badge ' + (p.needsImprovement > 1 ? 'warn' : 'good') }, p.verdict)
           ),
-          React.createElement('div', { className: 'foot-note', style: { marginTop: 4, whiteSpace: 'pre-line' } }, p.improveReasons)
+          React.createElement('div', { className: 'foot-note', style: { marginTop: 4, whiteSpace: 'pre-line' } }, '需改善：', p.improveNames)
         ))
       )
     )
@@ -982,14 +951,14 @@ const ROSTER_COLS = [
   { key: 'valueIndex', label: '單車產值指數', fmt: v => fmtNum(v, 1), num: true },
   { key: 'avgLaborRatio', label: '工資占比', fmt: v => fmtPct(v, 1), num: true },
   { key: 'laborIndex', label: '工資能力指數', fmt: v => fmtNum(v, 1), num: true },
-  { key: 'pct10wUp', label: '10萬公里以上%', fmt: v => fmtPct(v, 1), num: true },
-  { key: 'warrantyRatio', label: '保固車占比', fmt: v => fmtPct(v, 1), num: true },
+  { key: 'selfRevenueRatio', label: '自費營收占比', fmt: v => fmtPct(v, 1), num: true },
+  { key: 'compRevenueRatio', label: '補償營收占比', fmt: v => fmtPct(v, 1), num: true },
   { key: 'compositeIndex', label: '綜合戰力指數', fmt: v => fmtNum(v, 1), num: true },
   { key: 'qualification', label: '戰力資格' },
   { key: 'type', label: '戰力類型' },
   { key: 'plantRank', label: '廠內排名', num: true },
 ];
-const ROSTER_DEFAULT_VISIBLE = ['plant', 'name', 'tenure', 'avgMonthlyIntake', 'weightedRevPerUnit', 'avgMonthlyRevenue', 'avgLaborRatio', 'warrantyRatio', 'compositeIndex', 'qualification', 'type', 'plantRank'];
+const ROSTER_DEFAULT_VISIBLE = ['plant', 'name', 'tenure', 'avgMonthlyIntake', 'weightedRevPerUnit', 'avgMonthlyRevenue', 'avgLaborRatio', 'compRevenueRatio', 'compositeIndex', 'qualification', 'type', 'plantRank'];
 
 function RosterPage({ filteredTechs, filters, thresholds, goTech }) {
   const [sort, setSort] = useState({ key: 'compositeIndex', dir: -1 });
@@ -1064,7 +1033,7 @@ function TechDetailPage({ techKey: selKey, setTechKey, thresholds, role }) {
   const tenurePeers = TECHS.filter(t => tenureBucketOf(t.tenure) === tenureBucketOf(tech.tenure));
   const companyAvg = {
     rev: mean(TECHS.map(t => t.weightedRevPerUnit)), labor: mean(TECHS.map(t => t.avgLaborRatio)),
-    warranty: mean(TECHS.map(t => t.warrantyRatio)), composite: mean(TECHS.map(t => t.compositeIndex)),
+    comp: mean(TECHS.map(t => t.compRevenueRatio)), composite: mean(TECHS.map(t => t.compositeIndex)),
   };
   const tenureAvg = {
     rev: mean(tenurePeers.map(t => t.weightedRevPerUnit)), labor: mean(tenurePeers.map(t => t.avgLaborRatio)),
@@ -1079,7 +1048,7 @@ function TechDetailPage({ techKey: selKey, setTechKey, thresholds, role }) {
   const trendData = useMemo(() => ({
     labels: months.map(m => MONTH_LABELS[m - 1]),
     datasets: [
-      { label: '接車台數', data: months.map(m => techMonthly(tech, m).total_count), borderColor: th.series[0], backgroundColor: th.series[0], tension: .3, borderWidth: 2, pointRadius: 3 },
+      { label: '接車台數', data: months.map(m => techMonthly(tech, m).count), borderColor: th.series[0], backgroundColor: th.series[0], tension: .3, borderWidth: 2, pointRadius: 3 },
     ]
   }), [tech]);
   const revTrend = useMemo(() => ({
@@ -1092,15 +1061,21 @@ function TechDetailPage({ techKey: selKey, setTechKey, thresholds, role }) {
     labels: months.map(m => MONTH_LABELS[m - 1]),
     datasets: [
       { label: '工資占比', data: months.map(m => techMonthly(tech, m).labor_ratio), borderColor: th.series[3], backgroundColor: th.series[3], tension: .3, borderWidth: 2, pointRadius: 3 },
-      { label: '保固車占比', data: months.map(m => techMonthly(tech, m).warranty_ratio), borderColor: th.critical, backgroundColor: th.critical, tension: .3, borderWidth: 2, pointRadius: 3 },
+      { label: '補償營收占比', data: months.map(m => { const r = techMonthly(tech, m); return r.total_revenue ? r.comp_revenue / r.total_revenue : null; }), borderColor: th.critical, backgroundColor: th.critical, tension: .3, borderWidth: 2, pointRadius: 3 },
     ]
   }), [tech]);
 
-  const mileSums = techMileageSums(tech, 1, 8);
-  const mileTotal = Object.values(mileSums).reduce((a, b) => a + b, 0) || 1;
-  const mileageBar = {
-    labels: MILEAGE_BUCKETS.map(b => b.label),
-    datasets: [{ label: '進廠台數', data: MILEAGE_BUCKETS.map(b => mileSums[b.key]), backgroundColor: th.series.slice(0, 5), borderRadius: 4 }]
+  const revStructBar = {
+    labels: ['工資', '零件', '外修'],
+    datasets: [{
+      label: 'YTD 營收(元)',
+      data: [tech.selfLaborSum + tech.compLaborSum, tech.partsSum, tech.selfExternalSum].map(v => Math.round(v)),
+      backgroundColor: [th.series[0], th.series[3], th.series[1]], borderRadius: 4,
+    }]
+  };
+  const revSourceDonut = {
+    labels: ['自費營收', '補償營收'],
+    datasets: [{ data: [tech.selfRevenueSum, tech.compRevenueSum].map(v => Math.round(v)), backgroundColor: [th.series[0], th.critical], borderColor: getCssVar('--bg-surface') || '#fff', borderWidth: 2 }]
   };
 
   const compareBar = {
@@ -1127,22 +1102,20 @@ function TechDetailPage({ techKey: selKey, setTechKey, thresholds, role }) {
         React.createElement('div', { className: 'stat-row' }, React.createElement('span', null, '戰力資格 / 類型'), React.createElement('b', null, tech.qualification + ' · ' + tech.type)),
         React.createElement('div', { className: 'stat-row' }, React.createElement('span', null, '廠內戰力排名'), React.createElement('b', null, '第 ' + tech.plantRank + ' 名')),
         React.createElement('div', { className: 'divider' }),
-        React.createElement('div', { className: 'foot-note' }, React.createElement('b', null, '結構校正判讀：'), tech.structureNote),
-        React.createElement('div', { className: 'foot-note', style: { marginTop: 6 } }, React.createElement('b', null, '主管關注重點：'), tech.managerFocus)
+        React.createElement('div', { className: 'foot-note' }, React.createElement('b', null, '管理判讀：'), tech.verdict)
       ),
       React.createElement('div', { className: 'card', style: { gridColumn: 'span 2' } },
         React.createElement('div', { className: 'card-title' }, '核心指標與比較基準（YTD 1–8月）'),
         React.createElement('div', { className: 'grid grid-kpi' },
-          React.createElement(Kpi, { label: 'YTD 接車台數', value: techTotalIntake(tech, 1, 8), formatter: fmtInt }),
-          React.createElement(Kpi, { label: 'YTD 估算總營收', value: techTotalRevenue(tech, 1, 8), formatter: fmtMoney }),
+          React.createElement(Kpi, { label: 'YTD 接車台數', value: tech.totalCount8, formatter: fmtInt }),
+          React.createElement(Kpi, { label: 'YTD 總營收', value: tech.totalRevenue, formatter: fmtMoney }),
           React.createElement(Kpi, { label: '月均接車台數', value: tech.avgMonthlyIntake, formatter: v => fmtNum(v, 1) }),
-          React.createElement(Kpi, { label: '月均估算營收', value: tech.avgMonthlyIntake * tech.weightedRevPerUnit, formatter: fmtMoney }),
+          React.createElement(Kpi, { label: '月均營收', value: tech.avgMonthlyIntake * tech.weightedRevPerUnit, formatter: fmtMoney }),
           React.createElement(Kpi, { label: '單台營收', value: tech.weightedRevPerUnit, formatter: fmtMoney }),
-          React.createElement(Kpi, { label: '單台工資（估）', value: tech.weightedRevPerUnit * tech.avgLaborRatio, formatter: fmtMoney }),
           React.createElement(Kpi, { label: '工資營收占比', value: tech.avgLaborRatio, formatter: v => fmtPct(v, 1) }),
-          React.createElement(Kpi, { label: '保固車占比', value: tech.warrantyRatio, formatter: v => fmtPct(v, 1) }),
-          React.createElement(Kpi, { label: '非保固占比（估）', value: 1 - tech.warrantyRatio, formatter: v => fmtPct(v, 1) }),
-          React.createElement(Kpi, { label: '平均進廠里程（估）', value: techAvgMileage(tech, 1, 8), formatter: fmtKm }),
+          React.createElement(Kpi, { label: '自費營收占比', value: tech.selfRevenueRatio, formatter: v => fmtPct(v, 1) }),
+          React.createElement(Kpi, { label: '補償營收占比', value: tech.compRevenueRatio, formatter: v => fmtPct(v, 1) }),
+          React.createElement(Kpi, { label: '補償歸戶筆數', value: tech.compReconciledCount, formatter: fmtInt }),
           React.createElement(Kpi, { label: '綜合戰力指數', value: tech.compositeIndex, formatter: v => fmtNum(v, 1) })
         )
       )
@@ -1156,8 +1129,12 @@ function TechDetailPage({ techKey: selKey, setTechKey, thresholds, role }) {
       React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '單台營收推移（月）'), React.createElement(ChartCanvas, { type: 'line', data: revTrend, height: 260 }))
     ),
     React.createElement('div', { className: 'grid grid-2', style: { marginTop: 14 } },
-      React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '工資占比 / 保固車占比推移'), React.createElement(ChartCanvas, { type: 'line', data: mixTrend, height: 260 })),
-      React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, 'YTD 進廠里程結構'), React.createElement(ChartCanvas, { type: 'bar', data: mileageBar, height: 260, options: { plugins: { legend: { display: false } } } }))
+      React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '工資占比 / 補償營收占比推移'), React.createElement(ChartCanvas, { type: 'line', data: mixTrend, height: 260, options: { scales: { y: { ticks: { callback: v => (v * 100).toFixed(0) + '%', color: chartTheme().muted }, grid: { color: chartTheme().grid } } } } })),
+      React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, 'YTD 自費／補償營收占比'), React.createElement(ChartCanvas, { type: 'doughnut', data: revSourceDonut, height: 260 }))
+    ),
+    React.createElement('div', { className: 'card', style: { marginTop: 14 } },
+      React.createElement('div', { className: 'card-title' }, 'YTD 營收結構（工資／零件／外修）'),
+      React.createElement(ChartCanvas, { type: 'bar', data: revStructBar, height: 260, options: { indexAxis: 'y', plugins: { legend: { display: false } } } })
     ),
     React.createElement('div', { className: 'card', style: { marginTop: 14 } },
       React.createElement('div', { className: 'card-title' }, '異常提醒', React.createElement(GlossaryButton, { thresholds })),
@@ -1176,7 +1153,7 @@ function TenurePage({ filteredTechs }) {
       key: b.key, label: b.label, count: ts.length,
       avgIntake: mean(ts.map(t => t.avgMonthlyIntake)), avgRev: mean(ts.map(t => t.weightedRevPerUnit)),
       avgMonthlyRevenue: mean(ts.map(t => t.avgMonthlyIntake * t.weightedRevPerUnit)),
-      avgLabor: mean(ts.map(t => t.avgLaborRatio)), avgWarranty: mean(ts.map(t => t.warrantyRatio)),
+      avgLabor: mean(ts.map(t => t.avgLaborRatio)), avgComp: mean(ts.map(t => t.compRevenueRatio)),
       avgCapacity: mean(ts.map(t => t.capacityIndex)), avgValue: mean(ts.map(t => t.valueIndex)),
       avgLaborIdx: mean(ts.map(t => t.laborIndex)), avgComposite: mean(ts.map(t => t.compositeIndex)),
     };
@@ -1209,12 +1186,12 @@ function TenurePage({ filteredTechs }) {
     ),
     React.createElement('div', { className: 'table-wrap card', style: { marginTop: 14, padding: 0 } },
       React.createElement('table', null,
-        React.createElement('thead', null, React.createElement('tr', null, ['年資區間', '技師數', '月均接車', '單台營收', '月均營收', '平均工資占比', '平均保固占比', '平均綜合指數'].map(h => React.createElement('th', { key: h }, h)))),
+        React.createElement('thead', null, React.createElement('tr', null, ['年資區間', '技師數', '月均接車', '單台營收', '月均營收', '平均工資占比', '平均補償占比', '平均綜合指數'].map(h => React.createElement('th', { key: h }, h)))),
         React.createElement('tbody', null, groups.map(g => React.createElement('tr', { key: g.key },
           React.createElement('td', null, g.label), React.createElement('td', { className: 'num-cell' }, g.count),
           React.createElement('td', { className: 'num-cell' }, fmtNum(g.avgIntake, 1)), React.createElement('td', { className: 'num-cell' }, fmtMoney(g.avgRev)),
           React.createElement('td', { className: 'num-cell' }, fmtMoney(g.avgMonthlyRevenue)),
-          React.createElement('td', { className: 'num-cell' }, fmtPct(g.avgLabor, 1)), React.createElement('td', { className: 'num-cell' }, fmtPct(g.avgWarranty, 1)),
+          React.createElement('td', { className: 'num-cell' }, fmtPct(g.avgLabor, 1)), React.createElement('td', { className: 'num-cell' }, fmtPct(g.avgComp, 1)),
           React.createElement('td', { className: 'num-cell' }, fmtNum(g.avgComposite, 1))
         )))
       )
@@ -1227,93 +1204,68 @@ function TenurePage({ filteredTechs }) {
   );
 }
 
-/* ---------------- Mileage analysis ---------------- */
-function MileagePage({ filteredTechs, filters }) {
-  const th = chartTheme();
-  const monthCount = filters.to - filters.from + 1;
-  const rows = MILEAGE_BUCKETS.map(b => {
-    let count = 0;
-    filteredTechs.forEach(t => { for (let m = filters.from; m <= filters.to; m++) { const r = techMonthly(t, m); if (r && typeof r[b.key] === 'number') count += r[b.key]; } });
-    return { key: b.key, label: b.label, count, avgMonthlyCount: monthCount > 0 ? count / monthCount : null };
-  });
-  const totalCount = rows.reduce((a, r) => a + r.count, 0) || 1;
-  const avgRev = mean(filteredTechs.map(t => t.weightedRevPerUnit)) || 0;
-
-  const stackedByPlant = PLANT_NAMES.map(p => {
-    const ts = TECHS.filter(t => t.plant === p);
-    const sums = { m0_1: 0, m1_3: 0, m3_5: 0, m5_10: 0, m10up: 0 };
-    ts.forEach(t => { const s = techMileageSums(t, filters.from, filters.to); MILEAGE_BUCKETS.forEach(b => sums[b.key] += s[b.key]); });
-    return { plant: p, sums };
-  });
-  const stackedData = {
-    labels: stackedByPlant.map(r => r.plant),
-    datasets: MILEAGE_BUCKETS.map((b, i) => ({
-      label: b.label, data: stackedByPlant.map(r => r.sums[b.key]), backgroundColor: th.series[i], borderRadius: 3,
-    }))
-  };
-  const stackedOpt = { scales: { x: { stacked: true, ticks: { color: chartTheme().muted } }, y: { stacked: true, ticks: { color: chartTheme().muted }, grid: { color: chartTheme().grid } } } };
-
-  const donut = { labels: rows.map(r => r.label), datasets: [{ data: rows.map(r => r.count), backgroundColor: th.series, borderColor: getCssVar('--bg-surface') || '#fff', borderWidth: 2 }] };
-
+/* ---------------- Mileage analysis (data not available in current source) ---------------- */
+function MileagePage({ thresholds }) {
   return React.createElement('div', null,
-    React.createElement('div', { className: 'grid grid-2' },
-      React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '進廠里程區間占比（篩選範圍）'), React.createElement(ChartCanvas, { type: 'doughnut', data: donut, height: 300 })),
-      React.createElement('div', { className: 'card' },
-        React.createElement('div', { className: 'card-title' }, '各里程區間統計（估算營收）', React.createElement('span', { className: 'hint' }, '以平均單台營收估算')),
-        React.createElement('div', { className: 'table-wrap' },
-          React.createElement('table', null,
-            React.createElement('thead', null, React.createElement('tr', null, ['里程區間', '台數', '月均台數', '占比', '估算營收', '月均營收', '營收占比'].map(h => React.createElement('th', { key: h }, h)))),
-            React.createElement('tbody', null, rows.map(r => {
-              const revEst = r.count * avgRev; const revShare = revEst / (totalCount * avgRev || 1);
-              return React.createElement('tr', { key: r.key },
-                React.createElement('td', null, r.label), React.createElement('td', { className: 'num-cell' }, fmtInt(r.count)),
-                React.createElement('td', { className: 'num-cell' }, fmtNum(r.avgMonthlyCount, 1)),
-                React.createElement('td', { className: 'num-cell' }, fmtPct(r.count / totalCount, 1)),
-                React.createElement('td', { className: 'num-cell' }, fmtMoney(revEst)),
-                React.createElement('td', { className: 'num-cell' }, fmtMoney(monthCount > 0 ? revEst / monthCount : null)),
-                React.createElement('td', { className: 'num-cell' }, fmtPct(revShare, 1))
-              );
-            }))
-          )
+    React.createElement('div', { style: { display: 'flex', justifyContent: 'flex-end', marginBottom: 8 } }, React.createElement(GlossaryButton, { thresholds })),
+    React.createElement('div', { className: 'card' },
+      React.createElement('div', { className: 'card-title' }, '維修里程分析'),
+      React.createElement('div', { className: 'empty-state', style: { padding: '48px 20px' } },
+        React.createElement('div', { style: { fontSize: 15, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 } }, '目前資料來源未提供進廠里程欄位'),
+        React.createElement('p', { className: 'foot-note', style: { maxWidth: 520, margin: '0 auto' } },
+          '本次更新的資料來源（' + DATA.meta.sourceFile + '）為自費／補償財務系統的實績彙整，未包含進廠里程與保固判定欄位，因此無法呈現里程區間分布。'
+        ),
+        React.createElement('p', { className: 'foot-note', style: { maxWidth: 520, margin: '10px auto 0' } },
+          '如需恢復本頁分析，請於「資料匯入」頁上傳含「進廠里程」欄位的工單資料，系統會自動依里程區間重新計算。'
         )
       )
-    ),
-    React.createElement('div', { className: 'card', style: { marginTop: 14 } },
-      React.createElement('div', { className: 'card-title' }, '各廠里程結構比較（堆疊台數）'),
-      React.createElement(ChartCanvas, { type: 'bar', data: stackedData, height: 340, options: stackedOpt })
     )
   );
 }
 
 /* ---------------- Revenue structure ---------------- */
-function RevenuePage({ filteredTechs }) {
+function RevenuePage({ filteredTechs, thresholds }) {
   const th = chartTheme();
-  const laborShare = mean(filteredTechs.map(t => t.avgLaborRatio));
-  const warrantyShare = mean(filteredTechs.map(t => t.warrantyRatio));
-  const donut1 = { labels: ['工資收入占比', '非工資收入占比（零件／鈑烤／其他，估）'], datasets: [{ data: [laborShare, 1 - laborShare], backgroundColor: [th.series[0], th.series[3]], borderColor: getCssVar('--bg-surface') || '#fff', borderWidth: 2 }] };
-  const donut2 = { labels: ['保固營收占比', '非保固營收占比（自費／理賠／補償，估）'], datasets: [{ data: [warrantyShare, 1 - warrantyShare], backgroundColor: [th.critical, th.series[2]], borderColor: getCssVar('--bg-surface') || '#fff', borderWidth: 2 }] };
+  const sums = { labor: 0, parts: 0, external: 0, self: 0, comp: 0 };
+  filteredTechs.forEach(t => {
+    sums.labor += (t.selfLaborSum || 0) + (t.compLaborSum || 0);
+    sums.parts += t.partsSum || 0;
+    sums.external += t.selfExternalSum || 0;
+    sums.self += t.selfRevenueSum || 0;
+    sums.comp += t.compRevenueSum || 0;
+  });
+  const donut1 = { labels: ['工資', '零件', '外修'], datasets: [{ data: [sums.labor, sums.parts, sums.external].map(Math.round), backgroundColor: [th.series[0], th.series[3], th.series[1]], borderColor: getCssVar('--bg-surface') || '#fff', borderWidth: 2 }] };
+  const donut2 = { labels: ['自費營收', '補償營收'], datasets: [{ data: [sums.self, sums.comp].map(Math.round), backgroundColor: [th.series[0], th.critical], borderColor: getCssVar('--bg-surface') || '#fff', borderWidth: 2 }] };
 
   const byPlant = PLANT_NAMES.map(p => {
     const ts = TECHS.filter(t => t.plant === p);
-    return { plant: p, labor: mean(ts.map(t => t.avgLaborRatio)), warranty: mean(ts.map(t => t.warrantyRatio)) };
+    const labor = ts.reduce((a, t) => a + (t.selfLaborSum || 0) + (t.compLaborSum || 0), 0);
+    const parts = ts.reduce((a, t) => a + (t.partsSum || 0), 0);
+    const external = ts.reduce((a, t) => a + (t.selfExternalSum || 0), 0);
+    const total = labor + parts + external || 1;
+    return { plant: p, laborPct: labor / total * 100, partsPct: parts / total * 100, externalPct: external / total * 100 };
   });
   const stackData = {
     labels: byPlant.map(r => r.plant),
     datasets: [
-      { label: '工資收入占比', data: byPlant.map(r => +(r.labor * 100).toFixed(1)), backgroundColor: th.series[0], borderRadius: 3 },
-      { label: '非工資收入占比（估）', data: byPlant.map(r => +((1 - r.labor) * 100).toFixed(1)), backgroundColor: th.series[3], borderRadius: 3 },
+      { label: '工資占比', data: byPlant.map(r => +r.laborPct.toFixed(1)), backgroundColor: th.series[0], borderRadius: 3 },
+      { label: '零件占比', data: byPlant.map(r => +r.partsPct.toFixed(1)), backgroundColor: th.series[3], borderRadius: 3 },
+      { label: '外修占比', data: byPlant.map(r => +r.externalPct.toFixed(1)), backgroundColor: th.series[1], borderRadius: 3 },
     ]
   };
   const stackOpt = { scales: { x: { stacked: true, ticks: { color: chartTheme().muted } }, y: { stacked: true, ticks: { color: chartTheme().muted, callback: v => v + '%' }, grid: { color: chartTheme().grid } } } };
 
   return React.createElement('div', null,
-    React.createElement('p', { className: 'foot-note', style: { marginBottom: 12 } }, '＊來源資料未提供零件／鈑烤／其他收入及理賠／補償的獨立欄位，故以「工資占比」與「保固占比」推算對應的非工資、非保固份額；如需精確拆分請於資料匯入頁補充對應欄位。'),
+    React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 } },
+      React.createElement('p', { className: 'foot-note', style: { margin: 0 } }, '本頁採 205 自費／補償系統的實際入帳金額計算，工資／零件／外修合計即為總營收，無估算成分。'),
+      React.createElement(GlossaryButton, { thresholds })
+    ),
     React.createElement('div', { className: 'grid grid-2' },
-      React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '收入結構（工資 vs 非工資，估）'), React.createElement(ChartCanvas, { type: 'doughnut', data: donut1, height: 300 })),
-      React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '營收來源結構（保固 vs 非保固，估）'), React.createElement(ChartCanvas, { type: 'doughnut', data: donut2, height: 300 }))
+      React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '收入結構（工資／零件／外修）'), React.createElement(ChartCanvas, { type: 'doughnut', data: donut1, height: 300 })),
+      React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '營收來源結構（自費 vs 補償）'), React.createElement(ChartCanvas, { type: 'doughnut', data: donut2, height: 300 }))
     ),
     React.createElement('div', { className: 'card', style: { marginTop: 14 } },
-      React.createElement('div', { className: 'card-title' }, '各廠工資收入占比結構比較'),
+      React.createElement('div', { className: 'card-title' }, '各廠收入結構比較'),
       React.createElement(ChartCanvas, { type: 'bar', data: stackData, height: 340, options: stackOpt })
     )
   );
@@ -1324,7 +1276,7 @@ function TrendPage({ filteredTechs, role }) {
   const th = chartTheme();
   const [metric, setMetric] = useState('intake');
   const [compareMode, setCompareMode] = useState('plant');
-  const metricLabels = { intake: '接車台數', rev: '單台營收', labor: '工資占比', warranty: '保固車占比' };
+  const metricLabels = { intake: '接車台數', rev: '單台營收', labor: '工資占比', comp: '補償營收占比' };
 
   function seriesFor(techs) {
     return MONTHS.map(m => {
@@ -1332,7 +1284,7 @@ function TrendPage({ filteredTechs, role }) {
       if (metric === 'intake') return agg.intake;
       if (metric === 'rev') return agg.avgRevPerUnit;
       if (metric === 'labor') return agg.avgLaborRatio;
-      return agg.avgWarrantyRatio;
+      return agg.avgCompRatio;
     });
   }
 
@@ -1346,7 +1298,7 @@ function TrendPage({ filteredTechs, role }) {
   if (compareMode === 'company' || compareMode === 'both') datasets.push({ label: '全公司平均', data: companySeries, borderColor: th.series[2], backgroundColor: th.series[2], borderWidth: 2, tension: .3, pointRadius: 3, borderDash: [2, 2] });
 
   const lineData = { labels: MONTH_LABELS, datasets };
-  const isPctMetric = metric === 'labor' || metric === 'warranty';
+  const isPctMetric = metric === 'labor' || metric === 'comp';
 
   return React.createElement('div', null,
     React.createElement('div', { className: 'filter-bar', style: { marginTop: 0, marginBottom: 14 } },
@@ -1369,13 +1321,13 @@ function TrendPage({ filteredTechs, role }) {
 
 /* ---------------- Ranking & alerts ---------------- */
 const RANK_METRICS = [
-  { key: 'revenue', label: '估算總營收（區間累計）', get: (t, f) => techTotalRevenue(t, f.from, f.to), fmt: fmtMoney },
+  { key: 'revenue', label: '總營收（區間累計）', get: (t, f) => techTotalRevenue(t, f.from, f.to), fmt: fmtMoney },
   { key: 'monthlyRevenue', label: '月均營收', get: (t, f) => { const mc = f.to - f.from + 1; return mc > 0 ? techTotalRevenue(t, f.from, f.to) / mc : null; }, fmt: fmtMoney },
   { key: 'monthlyIntake', label: '月均接車台數', get: t => t.avgMonthlyIntake, fmt: v => fmtNum(v, 1) },
   { key: 'avgRev', label: '單台營收', get: t => t.weightedRevPerUnit, fmt: fmtMoney },
-  { key: 'avgWage', label: '單台工資（估）', get: t => t.weightedRevPerUnit * t.avgLaborRatio, fmt: fmtMoney },
   { key: 'laborIndex', label: '工資能力指數（工時效率代理）', get: t => t.laborIndex, fmt: v => fmtNum(v, 1) },
-  { key: 'selfPay', label: '非保固營收（估）', get: t => techTotalRevenue(t, 1, 8) * (1 - t.warrantyRatio), fmt: fmtMoney },
+  { key: 'selfRevenue', label: '自費營收（區間累計）', get: (t, f) => techSelfRevenue(t, f.from, f.to), fmt: fmtMoney },
+  { key: 'compRevenue', label: '補償營收（區間累計）', get: (t, f) => techCompRevenue(t, f.from, f.to), fmt: fmtMoney },
   { key: 'composite', label: '綜合戰力指數（達成率）', get: t => t.compositeIndex, fmt: v => fmtNum(v, 1) },
   { key: 'growth', label: '成長幅度（近2月 vs 前2月）', get: t => growthRate(t), fmt: v => v == null ? '—' : (v * 100).toFixed(1) + '%' },
 ];
@@ -1383,8 +1335,8 @@ function growthRate(t) {
   const ms = availableMonths(t);
   if (ms.length < 4) return null;
   const last2 = ms.slice(-2), prev2 = ms.slice(-4, -2);
-  const a = mean(last2.map(m => techMonthly(t, m).total_count * techMonthly(t, m).rev_per_unit));
-  const b = mean(prev2.map(m => techMonthly(t, m).total_count * techMonthly(t, m).rev_per_unit));
+  const a = mean(last2.map(m => techMonthly(t, m).total_revenue));
+  const b = mean(prev2.map(m => techMonthly(t, m).total_revenue));
   if (a == null || b == null || b === 0) return null;
   return (a - b) / b;
 }
@@ -1447,7 +1399,7 @@ function RankingPage({ filteredTechs, filters, thresholds, goTech }) {
 }
 
 /* ---------------- Import page ---------------- */
-const IMPORT_FIELDS = ['日期', '服務廠代碼', '服務廠名稱', '技師員工編號', '技師姓名', '到職日期', '職級', '工單號碼', '車牌或車輛識別碼', '車型', '車齡', '進廠里程', '維修類型', '工單類型', '自費／保固／理賠／補償', '工資收入', '零件收入', '鈑噴收入', '其他收入', '總營收', '銷售工時', '出勤工時', '完工狀態', '交車日期'];
+const IMPORT_FIELDS = ['日期', '服務廠名稱', '技師姓名', '工單號碼', '進廠台次', '自費工資', '自費零件', '自費外修', '自費營收', '補償工資', '補償零件', '補償營收', '總營收', '單台營收', '工資比', '補償筆數', '進廠里程'];
 const REQUIRED_FIELDS = ['日期', '服務廠名稱', '技師姓名', '工單號碼', '總營收'];
 
 function ImportPage() {
@@ -1547,7 +1499,7 @@ function SettingsPage({ thresholds, setThresholds }) {
     ['revGapPct', '單台營收低於同廠平均 (%) → 觸發異常', 1],
     ['laborLow', '工資占比合理下限', 0.01],
     ['laborHigh', '工資占比合理上限', 0.01],
-    ['warrantyGapPct', '保固車占比高於同廠平均 (%) → 觸發異常', 1],
+    ['compGapPct', '補償營收占比高於同廠平均 (百分點) → 觸發異常', 0.5],
     ['compositeGreen', '綜合戰力指數 綠燈門檻（≥）', 1],
     ['compositeWarn', '綜合戰力指數 黃燈門檻（≥）', 1],
     ['seniorYears', '「高年資」定義（年）', 1],
@@ -1598,7 +1550,7 @@ function RolesPage({ role, setRole }) {
       React.createElement('ul', { style: { margin: '6px 0 0 18px', padding: 0 } },
         React.createElement('li', null, '服務部主管：可查看所有服務廠、所有技師、匯入資料與門檻設定'),
         React.createElement('li', null, '廠長／技師長：全域篩選器鎖定於所屬服務廠，僅能比較廠內技師'),
-        React.createElement('li', null, '技師：僅能查看自己的個人分析、績效推移與里程結構，其餘管理頁面隱藏')
+        React.createElement('li', null, '技師：僅能查看自己的個人分析與績效推移，其餘管理頁面隱藏')
       )
     )
   );
