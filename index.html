@@ -253,8 +253,18 @@ PLANTS.forEach(p => {
   p.compRevenueRatio = p.totalRevenue8 > 0 ? p.compRevenue / p.totalRevenue8 : null;
   p.csiOverall = p.csi ? p.csi.overall : null;
   p.csiCheckout = p.csi ? p.csi.checkout : null;
+  p.mileageBuckets = mileageBucketsFromPct(p.mileagePct);
 });
 function plantCompRatio(plantName) { const p = PLANTS.find(x => x.name === plantName); return p ? p.compRevenueRatio : null; }
+// 3萬以下/5萬以上/10萬以上 are threshold (cumulative) shares, not exclusive buckets;
+// derive 4 mutually-exclusive shares that sum to ~100% for charting.
+function mileageBucketsFromPct(pct) {
+  if (!pct) return null;
+  const u30 = pct.under30k, o50 = pct.over50k, o100 = pct.over100k;
+  return {
+    u30, m30_50: Math.max(0, 1 - u30 - o50), m50_100: Math.max(0, o50 - o100), o100,
+  };
+}
 TECHS.forEach(t => {
   t.compRevenueRatio = t.totalRevenue > 0 ? t.compRevenueSum / t.totalRevenue : null;
   t.selfRevenueRatio = t.totalRevenue > 0 ? t.selfRevenueSum / t.totalRevenue : null;
@@ -264,6 +274,7 @@ TECHS.forEach(t => {
   t.plantAvgCompRatio = plantCompRatio(t.plant);
   t.csiOverall = t.csi ? t.csi.overall : null;
   t.csiRepair = t.csi ? t.csi.repair : null;
+  t.mileageBuckets = mileageBucketsFromPct(t.mileagePct);
 });
 [...TECHS].sort((a, b) => (b.compositeIndex || 0) - (a.compositeIndex || 0)).forEach((t, i) => { t.companyRank = i + 1; });
 
@@ -531,6 +542,7 @@ const METRIC_GLOSSARY = [
   { title: '月均', desc: '所選「分析區間」內的加總數值 ÷ 區間內月數，用來排除月份長短造成的比較失真，方便跨區間比較。' },
   { title: '戰力資格（正式戰力／觀察期）', desc: '1–8月有效上線月份達 3 個月以上才列入「正式戰力」比較基準；未滿 3 個月列為「觀察期」，暫不納入同廠平均計算。' },
   { title: '戰力類型（核心戰力／高產能／高產值／需改善）', desc: '產能、產值皆≥100為核心戰力；僅產能≥100為高產能；僅產值≥100為高產值；兩者皆<100為需改善。用於快速辨識技師的戰力特徵。' },
+  { title: '3萬以下／5萬以上／10萬以上（里程）', desc: '技師接車里程區間百分比資料為「累計門檻」占比，例如「5萬以上」代表該技師接的車輛中，里程數達5萬公里以上（含10萬以上）的比例，並非互斥區間，因此三個數字加總不會是100%。維修里程分析頁另外用這三個數字換算出「3–5萬」「5–10萬」兩個互斥區間，方便畫成合計100%的圓餅圖。此資料為2026年1–8月整體區間的單一統計，不隨月份篩選變動。' },
 ];
 function alertGlossary(th) {
   return [
@@ -559,7 +571,7 @@ function GlossaryModal({ thresholds, onClose }) {
       ))
     ),
     React.createElement('p', { className: 'foot-note', style: { marginTop: 14 } }, '燈號說明：', React.createElement(RagBadge, { rag: 'good' }), ' 達標　', React.createElement(RagBadge, { rag: 'warn' }), ' 接近門檻　', React.createElement(RagBadge, { rag: 'critical' }), ' 異常　', React.createElement(RagBadge, { rag: 'gray' }), ' 無資料。門檻值可於「指標與門檻設定」頁調整。'),
-    React.createElement('p', { className: 'foot-note', style: { marginTop: 8 } }, '資料來源：', DATA.meta.sourceFile, '。本次資料為自費／補償實績財務資料，不含進廠里程與保固判定欄位，故戰力分析僅以接車產能、單車產值、工資能力三項組成，不做里程／保固結構校正。')
+    React.createElement('p', { className: 'foot-note', style: { marginTop: 8 } }, '資料來源：', DATA.meta.sourceFile, '（自費／補償財務實績，戰力分析以接車產能、單車產值、工資能力三項組成，不做保固結構校正）；', DATA.meta.mileageSource, '（進廠里程區間占比，2026年1–8月整體區間單一統計）。')
   );
 }
 function GlossaryButton({ thresholds }) {
@@ -989,6 +1001,7 @@ const ROSTER_COLS = [
   { key: 'valueIndex', label: '單車產值指數', fmt: v => fmtNum(v, 1), num: true },
   { key: 'avgLaborRatio', label: '工資占比', fmt: v => fmtPct(v, 1), num: true },
   { key: 'laborIndex', label: '工資能力指數', fmt: v => fmtNum(v, 1), num: true },
+  { key: 'mileageOver100k', label: '10萬公里以上占比', fmt: v => fmtPct(v, 1), num: true, get: t => t.mileageBuckets ? t.mileageBuckets.o100 : null },
   { key: 'selfRevenueRatio', label: '自費營收占比', fmt: v => fmtPct(v, 1), num: true },
   { key: 'compRevenueRatio', label: '補償營收占比', fmt: v => fmtPct(v, 1), num: true },
   { key: 'compositeIndex', label: '綜合戰力指數', fmt: v => fmtNum(v, 1), num: true },
@@ -1118,6 +1131,10 @@ function TechDetailPage({ techKey: selKey, setTechKey, thresholds, role }) {
     labels: ['自費營收', '補償營收'],
     datasets: [{ data: [tech.selfRevenueSum, tech.compRevenueSum].map(v => Math.round(v)), backgroundColor: [th.series[0], th.critical], borderColor: getCssVar('--bg-surface') || '#fff', borderWidth: 2 }]
   };
+  const mileageDonut = tech.mileageBuckets ? {
+    labels: MILEAGE_BUCKET_DEFS.map(b => b.label),
+    datasets: [{ data: MILEAGE_BUCKET_DEFS.map(b => +(tech.mileageBuckets[b.key] * 100).toFixed(1)), backgroundColor: th.series.slice(0, 4), borderColor: getCssVar('--bg-surface') || '#fff', borderWidth: 2 }]
+  } : null;
 
   const compareBar = {
     labels: ['本人', '同廠平均', '全公司平均', '同年資平均'],
@@ -1177,9 +1194,15 @@ function TechDetailPage({ techKey: selKey, setTechKey, thresholds, role }) {
       React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '工資占比 / 補償營收占比推移'), React.createElement(ChartCanvas, { type: 'line', data: mixTrend, height: 260, options: { scales: { y: { ticks: { callback: v => (v * 100).toFixed(0) + '%', color: chartTheme().muted }, grid: { color: chartTheme().grid } } } } })),
       React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, 'YTD 自費／補償營收占比'), React.createElement(ChartCanvas, { type: 'doughnut', data: revSourceDonut, height: 260 }))
     ),
-    React.createElement('div', { className: 'card', style: { marginTop: 14 } },
-      React.createElement('div', { className: 'card-title' }, 'YTD 營收結構（工資／零件／外修）'),
-      React.createElement(ChartCanvas, { type: 'bar', data: revStructBar, height: 260, options: { indexAxis: 'y', plugins: { legend: { display: false } } } })
+    React.createElement('div', { className: 'grid grid-2', style: { marginTop: 14 } },
+      React.createElement('div', { className: 'card' },
+        React.createElement('div', { className: 'card-title' }, 'YTD 營收結構（工資／零件／外修）'),
+        React.createElement(ChartCanvas, { type: 'bar', data: revStructBar, height: 260, options: { indexAxis: 'y', plugins: { legend: { display: false } } } })
+      ),
+      React.createElement('div', { className: 'card' },
+        React.createElement('div', { className: 'card-title' }, '進廠里程結構'),
+        mileageDonut ? React.createElement(ChartCanvas, { type: 'doughnut', data: mileageDonut, height: 260 }) : React.createElement('div', { className: 'empty-state' }, '此技師暫無里程資料。')
+      )
     ),
     React.createElement('div', { className: 'card', style: { marginTop: 14 } },
       React.createElement('div', { className: 'card-title' }, '異常提醒', React.createElement(GlossaryButton, { thresholds })),
@@ -1256,21 +1279,79 @@ function TenurePage({ filteredTechs }) {
   );
 }
 
-/* ---------------- Mileage analysis (data not available in current source) ---------------- */
-function MileagePage({ thresholds }) {
+/* ---------------- Mileage analysis ---------------- */
+const MILEAGE_BUCKET_DEFS = [
+  { key: 'u30', label: '3萬公里以下' },
+  { key: 'm30_50', label: '3–5萬公里' },
+  { key: 'm50_100', label: '5–10萬公里' },
+  { key: 'o100', label: '10萬公里以上' },
+];
+function MileagePage({ filteredTechs, role, thresholds }) {
+  const th = chartTheme();
+  const withMileage = useMemo(() => filteredTechs.filter(t => t.mileageBuckets), [filteredTechs]);
+  const missing = filteredTechs.length - withMileage.length;
+
+  const companyAgg = useMemo(() => {
+    const sums = { u30: 0, m30_50: 0, m50_100: 0, o100: 0 };
+    let weight = 0;
+    withMileage.forEach(t => {
+      const w = t.totalCount8 || 1;
+      MILEAGE_BUCKET_DEFS.forEach(b => { sums[b.key] += (t.mileageBuckets[b.key] || 0) * w; });
+      weight += w;
+    });
+    if (!weight) return null;
+    const out = {};
+    MILEAGE_BUCKET_DEFS.forEach(b => { out[b.key] = sums[b.key] / weight; });
+    return out;
+  }, [withMileage]);
+
+  const donut = companyAgg ? {
+    labels: MILEAGE_BUCKET_DEFS.map(b => b.label),
+    datasets: [{ data: MILEAGE_BUCKET_DEFS.map(b => +(companyAgg[b.key] * 100).toFixed(1)), backgroundColor: th.series.slice(0, 4), borderColor: getCssVar('--bg-surface') || '#fff', borderWidth: 2 }]
+  } : null;
+
+  const visiblePlants = role.role === 'plantHead' ? PLANTS.filter(p => p.name === role.plant) : PLANTS;
+  const plantStack = useMemo(() => {
+    const rows = visiblePlants.filter(p => p.mileageBuckets);
+    return {
+      labels: rows.map(p => p.name),
+      datasets: MILEAGE_BUCKET_DEFS.map((b, i) => ({
+        label: b.label, data: rows.map(p => +(p.mileageBuckets[b.key] * 100).toFixed(1)), backgroundColor: th.series[i], borderRadius: 3,
+      }))
+    };
+  }, [visiblePlants]);
+  const stackOpt = { scales: { x: { stacked: true, ticks: { color: chartTheme().muted } }, y: { stacked: true, ticks: { color: chartTheme().muted, callback: v => v + '%' }, grid: { color: chartTheme().grid } } } };
+
+  const techSorted = useMemo(() => [...withMileage].sort((a, b) => (b.mileageBuckets.o100 || 0) - (a.mileageBuckets.o100 || 0)), [withMileage]);
+
   return React.createElement('div', null,
-    React.createElement('div', { style: { display: 'flex', justifyContent: 'flex-end', marginBottom: 8 } }, React.createElement(GlossaryButton, { thresholds })),
-    React.createElement('div', { className: 'card' },
-      React.createElement('div', { className: 'card-title' }, '維修里程分析'),
-      React.createElement('div', { className: 'empty-state', style: { padding: '48px 20px' } },
-        React.createElement('div', { style: { fontSize: 15, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 } }, '目前資料來源未提供進廠里程欄位'),
-        React.createElement('p', { className: 'foot-note', style: { maxWidth: 520, margin: '0 auto' } },
-          '本次更新的資料來源（' + DATA.meta.sourceFile + '）為自費／補償財務系統的實績彙整，未包含進廠里程與保固判定欄位，因此無法呈現里程區間分布。'
-        ),
-        React.createElement('p', { className: 'foot-note', style: { maxWidth: 520, margin: '10px auto 0' } },
-          '如需恢復本頁分析，請於「資料匯入」頁上傳含「進廠里程」欄位的工單資料，系統會自動依里程區間重新計算。'
+    React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 8 } },
+      React.createElement('p', { className: 'foot-note', style: { margin: 0 } }, '資料來源：' + DATA.meta.mileageSource + '（2026年1–8月整體區間，非按月拆分）。3萬以下／5萬以上／10萬以上為累計門檻占比，「3–5萬」「5–10萬」為推算的互斥區間。' + (missing ? '有 ' + missing + ' 位篩選範圍內的技師無里程資料。' : '')),
+      React.createElement(GlossaryButton, { thresholds })
+    ),
+    React.createElement('div', { className: 'grid grid-2' },
+      React.createElement('div', { className: 'card' },
+        React.createElement('div', { className: 'card-title' }, '進廠里程結構（篩選範圍加權平均）'),
+        donut ? React.createElement(ChartCanvas, { type: 'doughnut', data: donut, height: 300 }) : React.createElement('div', { className: 'empty-state' }, '目前篩選範圍內沒有里程資料。')
+      ),
+      React.createElement('div', { className: 'card' },
+        React.createElement('div', { className: 'card-title' }, '10萬公里以上占比｜技師排行（前10）'),
+        React.createElement('div', { className: 'table-wrap' },
+          React.createElement('table', null,
+            React.createElement('thead', null, React.createElement('tr', null, ['服務廠', '技師', '10萬以上占比', '5萬以上占比', '3萬以下占比'].map(h => React.createElement('th', { key: h }, h)))),
+            React.createElement('tbody', null, techSorted.slice(0, 10).map(t => React.createElement('tr', { key: techKey(t) },
+              React.createElement('td', null, t.plant), React.createElement('td', null, t.name),
+              React.createElement('td', { className: 'num-cell' }, fmtPct(t.mileageBuckets.o100, 1)),
+              React.createElement('td', { className: 'num-cell' }, fmtPct(t.mileagePct.over50k, 1)),
+              React.createElement('td', { className: 'num-cell' }, fmtPct(t.mileagePct.under30k, 1))
+            )))
+          )
         )
       )
+    ),
+    React.createElement('div', { className: 'card', style: { marginTop: 14 } },
+      React.createElement('div', { className: 'card-title' }, '各廠里程結構比較'),
+      plantStack.labels.length ? React.createElement(ChartCanvas, { type: 'bar', data: plantStack, height: 340, options: stackOpt }) : React.createElement('div', { className: 'empty-state' }, '目前篩選範圍內沒有里程資料。')
     )
   );
 }
