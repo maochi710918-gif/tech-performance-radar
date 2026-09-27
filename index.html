@@ -524,7 +524,7 @@ const METRIC_GLOSSARY = [
   { title: '工資能力指數', desc: '技師平均工資占比 ÷ 同廠平均工資占比 × 100。原始資料無出勤／銷售工時欄位，故以此指數作為「工時效率」的代理指標。' },
   { title: '單台營收', desc: '（自費營收＋補償營收）÷ 進廠台次。每月直接依當月實績計算，1–8月整體則採「加權單台營收」（依各有效月台次加權），避免單月台數過少造成失真。' },
   { title: '台數（進廠台次）', desc: '205系統中每筆自費／補償明細計 1 台次；同一輛車同月若實際進廠 2 次，計 2 台次。是實際車輛進廠次數，不是金額。' },
-  { title: '月均營收', desc: '該廠／該技師「每個月」創造的總營收平均值 ＝ 月均接車台數 × 單台營收。與「單台營收」不同：單台營收是每一台車的平均產值，月均營收則是整體月營收規模，兩者相乘的關係可用來判斷是靠「量多」還是「單台產值高」創造營收。' },
+  { title: '月均營收／人均月營收', desc: '技師個人頁的「月均營收」是該技師自己每個月創造的營收；各廠績效頁的「人均月營收」則是該廠「平均每一位技師」每個月創造的營收（＝該廠月均台數 ÷ 技師人數 × 單台營收），不是全廠加總的營收規模。與「單台營收」不同：單台營收是每一台車的平均產值，月均／人均營收則是月營收規模，兩者相乘的關係可用來判斷是靠「量多」還是「單台產值高」創造營收。' },
   { title: '工資營收占比', desc: '（自費工資＋補償工資）÷ 總營收 × 100%。用來檢視營收結構中工資的占比是否合理。' },
   { title: '自費營收 / 補償營收', desc: '自費營收是客戶自行付費的維修營收；補償營收是原廠／保固體系補償技師的營收（不向客戶收費）。兩者相加＝總營收。補償營收占比可視為「非自費」業務的相對指標。' },
   { title: '零件 / 外修', desc: '零件＝自費與補償維修中使用的零件費用；外修（外修合計）僅出現在自費項目中，指外包給廠外的鈑金／烤漆等項目費用。三者（工資、零件、外修）合計即為總營收。' },
@@ -885,12 +885,12 @@ function PlantsPage({ onOpenPlant, thresholds, role, filteredTechs, filters }) {
   const barData = useMemo(() => ({
     labels: visiblePlants.map(p => p.name),
     datasets: [
-      { label: '月均接車台數', data: visiblePlants.map(p => Math.round(p.avgMonthlyIntake)), backgroundColor: th.series[0], borderRadius: 4, maxBarThickness: 22 },
+      { label: '人均月接車台數', data: visiblePlants.map(p => Math.round(p.avgMonthlyIntake)), backgroundColor: th.series[0], borderRadius: 4, maxBarThickness: 22 },
     ]
   }), [visiblePlants]);
   const barData2 = useMemo(() => ({
     labels: visiblePlants.map(p => p.name),
-    datasets: [{ label: '月均營收(元)', data: withRevenue.map(p => Math.round(p.avgMonthlyRevenue)), backgroundColor: th.series[2], borderRadius: 4, maxBarThickness: 22 }]
+    datasets: [{ label: '人均月營收(元)', data: withRevenue.map(p => Math.round(p.avgMonthlyRevenue)), backgroundColor: th.series[2], borderRadius: 4, maxBarThickness: 22 }]
   }), [withRevenue]);
 
   const monthCount = filters.to - filters.from + 1;
@@ -910,7 +910,7 @@ function PlantsPage({ onOpenPlant, thresholds, role, filteredTechs, filters }) {
   const cols = [
     ['name', '廠別'], ['techCount', '技師數'], ['formal', '正式戰力'], ['observation', '觀察期'],
     ['core', '核心戰力'], ['highVolume', '高產能'], ['highValue', '高產值'], ['needsImprovement', '需改善'],
-    ['coreRate', '核心率'], ['avgMonthlyIntake', '月均接車'], ['avgRevPerUnit', '單台營收'], ['avgMonthlyRevenue', '月均營收'],
+    ['coreRate', '核心率'], ['avgMonthlyIntake', '人均月接車'], ['avgRevPerUnit', '單台營收'], ['avgMonthlyRevenue', '人均月營收'],
     ['avgLaborRatio', '工資比'], ['compRevenueRatio', '補償營收占比'], ['compCount', '補償筆數'],
     ['csiOverall', 'CSI整體滿意度'], ['csiCheckout', 'CSI結帳(出納)'],
   ];
@@ -918,15 +918,15 @@ function PlantsPage({ onOpenPlant, thresholds, role, filteredTechs, filters }) {
   return React.createElement('div', null,
     React.createElement('div', { style: { display: 'flex', justifyContent: 'flex-end', marginBottom: 8 } }, React.createElement(GlossaryButton, { thresholds })),
     React.createElement('div', { className: 'grid grid-2' },
-      React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '各廠月均接車台數'), React.createElement(ChartCanvas, { type: 'bar', data: barData, height: 340 })),
-      React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '各廠月均營收'), React.createElement(ChartCanvas, { type: 'bar', data: barData2, height: 340 }))
+      React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '各廠人均月接車台數', React.createElement('span', { className: 'hint' }, '該廠月均台數 ÷ 技師人數')), React.createElement(ChartCanvas, { type: 'bar', data: barData, height: 340 })),
+      React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '各廠人均月營收', React.createElement('span', { className: 'hint' }, '該廠月均營收 ÷ 技師人數')), React.createElement(ChartCanvas, { type: 'bar', data: barData2, height: 340 }))
     ),
     React.createElement('div', { className: 'card', style: { marginTop: 14 } },
       React.createElement('div', { className: 'card-title' }, '各廠戰力總覽',
         React.createElement(Select, {
           value: sortKey, onChange: setSortKey, options: [
             { value: 'avgIndex', label: '依平均戰力指數排序' }, { value: 'avgRevPerUnit', label: '依單台營收排序' },
-            { value: 'avgMonthlyIntake', label: '依月均接車排序' }, { value: 'avgMonthlyRevenue', label: '依月均營收排序' }, { value: 'coreRate', label: '依核心率排序' },
+            { value: 'avgMonthlyIntake', label: '依人均月接車排序' }, { value: 'avgMonthlyRevenue', label: '依人均月營收排序' }, { value: 'coreRate', label: '依核心率排序' },
             { value: 'needsImprovement', label: '依需改善人數排序' },
           ]
         })
