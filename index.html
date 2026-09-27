@@ -263,7 +263,7 @@ TECHS.forEach(t => {
   t.externalRatio = t.totalRevenue > 0 ? t.selfExternalSum / t.totalRevenue : null;
   t.plantAvgCompRatio = plantCompRatio(t.plant);
   t.csiOverall = t.csi ? t.csi.overall : null;
-  t.csiCheckout = t.csi ? t.csi.checkout : null;
+  t.csiRepair = t.csi ? t.csi.repair : null;
 });
 [...TECHS].sort((a, b) => (b.compositeIndex || 0) - (a.compositeIndex || 0)).forEach((t, i) => { t.companyRank = i + 1; });
 
@@ -841,7 +841,7 @@ function OverviewPage({ filteredTechs, filters, thresholds, goTech }) {
     ),
     React.createElement('div', { className: 'grid grid-kpi', style: { marginTop: 14 } },
       React.createElement(Kpi, { label: 'CSI整體滿意度（全公司）', value: mean(TECHS.map(t => t.csiOverall)), formatter: v => fmtNum(v, 3) }),
-      React.createElement(Kpi, { label: 'CSI結帳服務（出納貢獻）', value: mean(TECHS.map(t => t.csiCheckout)), formatter: v => fmtNum(v, 3) }),
+      React.createElement(Kpi, { label: 'CSI結帳服務（出納貢獻，各廠平均）', value: mean(PLANTS.map(p => p.csiCheckout)), formatter: v => fmtNum(v, 3) }),
       React.createElement(Kpi, { label: 'CSI 已匹配技師數', value: TECHS.filter(t => t.csi).length + ' / ' + TECHS.length, formatter: v => v })
     ),
     React.createElement('p', { className: 'foot-note', style: { marginTop: 6 } }, 'CSI 滿意度資料來源：CSI 服務戰情系統（2025/03–2026/07，17個月），依服務廠＋技師姓名比對加入，不隨上方月份篩選變動。'),
@@ -975,9 +975,9 @@ const ROSTER_COLS = [
   { key: 'plantRank', label: '廠內排名', num: true },
   { key: 'companyRank', label: '全公司排名', num: true },
   { key: 'csiOverall', label: 'CSI整體滿意度', fmt: v => fmtNum(v, 2), num: true },
-  { key: 'csiCheckout', label: 'CSI結帳(出納)', fmt: v => fmtNum(v, 2), num: true },
+  { key: 'csiRepair', label: 'CSI保修滿意度', fmt: v => fmtNum(v, 2), num: true },
 ];
-const ROSTER_DEFAULT_VISIBLE = ['plant', 'name', 'tenure', 'avgMonthlyIntake', 'weightedRevPerUnit', 'avgMonthlyRevenue', 'avgLaborRatio', 'compRevenueRatio', 'compositeIndex', 'qualification', 'type', 'plantRank', 'companyRank', 'csiOverall', 'csiCheckout'];
+const ROSTER_DEFAULT_VISIBLE = ['plant', 'name', 'tenure', 'avgMonthlyIntake', 'weightedRevPerUnit', 'avgMonthlyRevenue', 'avgLaborRatio', 'compRevenueRatio', 'compositeIndex', 'qualification', 'type', 'plantRank', 'companyRank', 'csiOverall', 'csiRepair'];
 
 function RosterPage({ filteredTechs, filters, thresholds, goTech }) {
   const [sort, setSort] = useState({ key: 'compositeIndex', dir: -1 });
@@ -1138,7 +1138,7 @@ function TechDetailPage({ techKey: selKey, setTechKey, thresholds, role }) {
           React.createElement(Kpi, { label: '補償歸戶筆數', value: tech.compReconciledCount, formatter: fmtInt }),
           React.createElement(Kpi, { label: '綜合戰力指數', value: tech.compositeIndex, formatter: v => fmtNum(v, 1) }),
           React.createElement(Kpi, { label: 'CSI整體滿意度', value: tech.csiOverall, formatter: v => fmtNum(v, 2) }),
-          React.createElement(Kpi, { label: 'CSI結帳服務（出納貢獻）', value: tech.csiCheckout, formatter: v => fmtNum(v, 2) })
+          React.createElement(Kpi, { label: 'CSI保修滿意度', value: tech.csiRepair, formatter: v => fmtNum(v, 2) })
         ),
         !tech.csi ? React.createElement('p', { className: 'foot-note', style: { marginTop: 8 } }, '＊此技師姓名未能與 CSI 滿意度資料比對成功（可能是姓名寫法差異或無足夠問卷樣本），暫無滿意度數據。') : null
       )
@@ -1361,7 +1361,7 @@ const RANK_METRICS = [
   { key: 'composite', label: '綜合戰力指數（達成率）', get: t => t.compositeIndex, fmt: v => fmtNum(v, 1) },
   { key: 'growth', label: '成長幅度（近2月 vs 前2月）', get: t => growthRate(t), fmt: v => v == null ? '—' : (v * 100).toFixed(1) + '%' },
   { key: 'csiOverall', label: 'CSI整體滿意度', get: t => t.csiOverall, fmt: v => fmtNum(v, 2) },
-  { key: 'csiCheckout', label: 'CSI結帳服務（出納貢獻）', get: t => t.csiCheckout, fmt: v => fmtNum(v, 2) },
+  { key: 'csiRepair', label: 'CSI保修滿意度（個人）', get: t => t.csiRepair, fmt: v => fmtNum(v, 2) },
 ];
 function growthRate(t) {
   const ms = availableMonths(t);
