@@ -571,7 +571,7 @@ function GlossaryModal({ thresholds, onClose }) {
       ))
     ),
     React.createElement('p', { className: 'foot-note', style: { marginTop: 14 } }, '燈號說明：', React.createElement(RagBadge, { rag: 'good' }), ' 達標　', React.createElement(RagBadge, { rag: 'warn' }), ' 接近門檻　', React.createElement(RagBadge, { rag: 'critical' }), ' 異常　', React.createElement(RagBadge, { rag: 'gray' }), ' 無資料。門檻值可於「指標與門檻設定」頁調整。'),
-    React.createElement('p', { className: 'foot-note', style: { marginTop: 8 } }, '資料來源：', DATA.meta.sourceFile, '（自費／補償財務實績，戰力分析以接車產能、單車產值、工資能力三項組成，不做保固結構校正）；', DATA.meta.mileageSource, '（進廠里程區間占比，2026年1–8月整體區間單一統計）。')
+    React.createElement('p', { className: 'foot-note', style: { marginTop: 8 } }, '資料來源：', DATA.meta.sourceFile, '（自費／補償財務實績＋進廠里程區間占比；戰力分析以接車產能、單車產值、工資能力三項組成，不做保固結構校正；里程區間為2026年1–8月整體單一統計，不按月拆分）。')
   );
 }
 function GlossaryButton({ thresholds }) {
