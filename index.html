@@ -649,6 +649,7 @@ const ICON_SHAPES = {
   mileage: [['path', { d: 'M3 14a7 7 0 0 1 14 0' }], ['path', { d: 'M10 14l3-4' }], ['circle', { cx: 10, cy: 14, r: 1, fill: 'currentColor', stroke: 'none' }]],
   revenue: [['circle', { cx: 10, cy: 10, r: 7 }], ['path', { d: 'M10 3v7h7' }]],
   trend: [['path', { d: 'M3 14l5-5 3 3 6-7' }], ['path', { d: 'M13 5h4v4' }]],
+  retention: [['path', { d: 'M16 10a6 6 0 1 1-1.8-4.3' }], ['path', { d: 'M16 3.5v3.2h-3.2' }]],
   ranking: [['path', { d: 'M6 4h8l-1 5a3 3 0 0 1-6 0L6 4z' }], ['path', { d: 'M9 12v2h2v-2' }], ['path', { d: 'M7 16h6' }]],
   import: [['path', { d: 'M10 3v9' }], ['path', { d: 'M6.5 8.5L10 5l3.5 3.5' }], ['path', { d: 'M4 14v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2' }]],
   settings: [['line', { x1: 4, y1: 5, x2: 16, y2: 5 }], ['circle', { cx: 8, cy: 5, r: 1.6 }], ['line', { x1: 4, y1: 10, x2: 16, y2: 10 }], ['circle', { cx: 13, cy: 10, r: 1.6 }], ['line', { x1: 4, y1: 15, x2: 16, y2: 15 }], ['circle', { cx: 7, cy: 15, r: 1.6 }]],
@@ -672,6 +673,7 @@ const NAV = [
   { key: 'mileage', label: '維修里程分析', section: '分析', roles: ['manager', 'plantHead'] },
   { key: 'revenue', label: '營收結構分析', section: '分析', roles: ['manager', 'plantHead'] },
   { key: 'trend', label: '績效推移', section: '分析' },
+  { key: 'retention', label: '保留率分析與管理', section: '分析', roles: ['manager', 'plantHead'] },
   { key: 'ranking', label: '排名與異常', section: '分析', roles: ['manager', 'plantHead'] },
   { key: 'import', label: '資料匯入', section: '管理', roles: ['manager'] },
   { key: 'settings', label: '指標與門檻設定', section: '管理', roles: ['manager'] },
@@ -713,6 +715,7 @@ function App() {
   else if (page === 'mileage') pageEl = React.createElement(MileagePage, common);
   else if (page === 'revenue') pageEl = React.createElement(RevenuePage, common);
   else if (page === 'trend') pageEl = React.createElement(TrendPage, common);
+  else if (page === 'retention') pageEl = React.createElement(RetentionPage, common);
   else if (page === 'ranking') pageEl = React.createElement(RankingPage, common);
   else if (page === 'import') pageEl = React.createElement(ImportPage, common);
   else if (page === 'settings') pageEl = React.createElement(SettingsPage, { thresholds, setThresholds });
@@ -1580,6 +1583,132 @@ function RankingPage({ filteredTechs, filters, thresholds, goTech }) {
             React.createElement('ul', { style: { margin: '4px 0 0 18px', padding: 0 } }, flags.map((f, i) => React.createElement('li', { key: i }, f.label)))
           ))
         ) : React.createElement('div', { className: 'empty-state' }, '此篩選範圍內沒有異常提醒。')
+      )
+    )
+  );
+}
+
+/* ---------------- Retention analysis & management ---------------- */
+function RetentionPage({ filteredTechs, thresholds, role, goTech, setFilters }) {
+  const th = chartTheme();
+  const [sortKey, setSortKey] = useState('vsPlant');
+  const [scope, setScope] = useState('all');
+  const [tab, setTab] = useState('plant');
+
+  const valid = useMemo(() => filteredTechs.filter(t => t.retention), [filteredTechs]);
+  const rowsAll = useMemo(() => valid.map(t => {
+    const r = t.retention;
+    return {
+      t, rag: ragRetention(r.vsPlant, thresholds), uio: r.uio, main: r.mainCount, rate: r.rate,
+      plantRate: r.plantRate, vs: r.vsPlant, churn: r.churn,
+      recover: r.vsPlant < 0 ? Math.round(r.uio * -r.vsPlant) : 0,
+    };
+  }), [valid, thresholds]);
+
+  const weighted = list => { const w = list.reduce((a, r) => a + r.uio, 0); return w ? list.reduce((a, r) => a + r.rate * r.uio, 0) / w : null; };
+  const companyRate = weighted(rowsAll);
+  const ngCount = rowsAll.filter(r => r.rag === 'critical').length;
+  const warnCount = rowsAll.filter(r => r.rag === 'warn').length;
+  const totalRecover = rowsAll.reduce((a, r) => a + r.recover, 0);
+
+  const visiblePlants = role.role === 'plantHead' ? PLANTS.filter(p => p.name === role.plant) : PLANTS;
+  const plantRows = useMemo(() => visiblePlants.map(p => {
+    const list = rowsAll.filter(r => r.t.plant === p.name);
+    return {
+      plant: p.name, rate: p.retentionRate, techs: list.length, uio: list.reduce((a, r) => a + r.uio, 0),
+      ng: list.filter(r => r.rag === 'critical').length, warn: list.filter(r => r.rag === 'warn').length,
+      recover: list.reduce((a, r) => a + r.recover, 0),
+      best: list.length ? [...list].sort((a, b) => b.vs - a.vs)[0].t.name : '—',
+      worst: list.length ? [...list].sort((a, b) => a.vs - b.vs)[0].t.name : '—',
+    };
+  }).filter(p => p.rate != null).sort((a, b) => b.rate - a.rate), [visiblePlants, rowsAll]);
+  const plantAvg = mean(plantRows.map(p => p.rate));
+
+  const plantChart = {
+    labels: plantRows.map(p => p.plant),
+    datasets: [
+      { label: '廠定保保留率(%)', data: plantRows.map(p => +(p.rate * 100).toFixed(1)), backgroundColor: th.series[0], borderRadius: 4, maxBarThickness: 26 },
+      { type: 'line', label: '各廠平均(%)', data: plantRows.map(() => plantAvg == null ? null : +(plantAvg * 100).toFixed(1)), borderColor: th.accent, borderWidth: 2, borderDash: [5, 4], pointRadius: 0 },
+    ],
+  };
+  const plantOpt = { scales: { y: { min: 50, ticks: { callback: v => v + '%', color: chartTheme().muted }, grid: { color: chartTheme().grid } } } };
+
+  const shown = useMemo(() => {
+    let list = scope === 'ng' ? rowsAll.filter(r => r.rag === 'critical' || r.rag === 'warn') : rowsAll;
+    const dirs = { vsPlant: (a, b) => a.vs - b.vs, rateDesc: (a, b) => b.rate - a.rate, rateAsc: (a, b) => a.rate - b.rate, uio: (a, b) => b.uio - a.uio, recover: (a, b) => b.recover - a.recover };
+    return [...list].sort(dirs[sortKey]);
+  }, [rowsAll, scope, sortKey]);
+
+  const diverging = useMemo(() => [...rowsAll].sort((a, b) => a.vs - b.vs), [rowsAll]);
+  const ragColor = r => r === 'critical' ? th.critical : r === 'warn' ? th.warning : th.good;
+  const divData = {
+    labels: diverging.map(r => r.t.plant + ' · ' + r.t.name),
+    datasets: [{ label: '保留率 vs 同廠（百分點）', data: diverging.map(r => +(r.vs * 100).toFixed(1)), backgroundColor: diverging.map(r => ragColor(r.rag)), borderRadius: 3, maxBarThickness: 16 }],
+  };
+
+  const kpi = (label, value, formatter) => React.createElement(Kpi, { label, value, formatter });
+  return React.createElement('div', null,
+    React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 10 } },
+      React.createElement('p', { className: 'foot-note', style: { margin: 0 } }, '資料來源：' + DATA.meta.retentionSource + '。' + DATA.meta.retentionRule + '；無資料者不列入。保留率為2025年定保車輛於2026年回廠比例，非按月資料。'),
+      React.createElement(GlossaryButton, { thresholds })
+    ),
+    React.createElement('div', { className: 'grid grid-kpi' },
+      kpi('有效技師數', rowsAll.length + ' / ' + filteredTechs.length, v => v),
+      kpi('定保保留率（依UIO加權）', companyRate, v => fmtPct(v, 1)),
+      kpi('異常技師（紅燈）', ngCount, fmtInt),
+      kpi('警示技師（黃燈）', warnCount, fmtInt),
+      kpi('補到同廠平均可挽回台數', totalRecover, fmtInt)
+    ),
+    React.createElement('div', { className: 'tabs', style: { marginTop: 14 } },
+      [['plant', '服務廠層級'], ['tech', '技師個人層級']].map(([k, l]) => React.createElement('div', { key: k, className: 'tab' + (tab === k ? ' active' : ''), onClick: () => setTab(k) }, l))
+    ),
+    tab === 'plant' ? React.createElement(React.Fragment, null,
+      React.createElement('div', { className: 'card' },
+        React.createElement('div', { className: 'card-title' }, '各廠定保保留率', React.createElement('span', { className: 'hint' }, '虛線＝各廠平均；點下方列可帶入該廠篩選')),
+        plantRows.length ? React.createElement(ChartCanvas, { type: 'bar', data: plantChart, height: 320, options: plantOpt }) : React.createElement('div', { className: 'empty-state' }, '沒有資料')
+      ),
+      React.createElement('div', { className: 'card', style: { marginTop: 14 } },
+        React.createElement('div', { className: 'card-title' }, '服務廠保留率管理表'),
+        React.createElement('div', { className: 'table-wrap' },
+          React.createElement('table', null,
+            React.createElement('thead', null, React.createElement('tr', null, ['服務廠', '廠保留率', 'vs各廠平均(百分點)', '有效技師', '定保對象(UIO)', '異常(紅)', '警示(黃)', '可挽回台數', '最高', '最低'].map(h => React.createElement('th', { key: h }, h)))),
+            React.createElement('tbody', null, plantRows.map(p => React.createElement('tr', { key: p.plant, onClick: () => { setFilters(f => Object.assign({}, f, { plant: p.plant })); setTab('tech'); } },
+              React.createElement('td', null, p.plant),
+              React.createElement('td', { className: 'num-cell' }, fmtPct(p.rate, 1)),
+              React.createElement('td', { className: 'num-cell' }, ((p.rate - plantAvg) >= 0 ? '+' : '') + ((p.rate - plantAvg) * 100).toFixed(1)),
+              React.createElement('td', { className: 'num-cell' }, p.techs), React.createElement('td', { className: 'num-cell' }, fmtInt(p.uio)),
+              React.createElement('td', { className: 'num-cell' }, p.ng), React.createElement('td', { className: 'num-cell' }, p.warn),
+              React.createElement('td', { className: 'num-cell' }, fmtInt(p.recover)),
+              React.createElement('td', null, p.best), React.createElement('td', null, p.worst)
+            )))
+          )
+        )
+      )
+    ) : React.createElement(React.Fragment, null,
+      React.createElement('div', { className: 'card' },
+        React.createElement('div', { className: 'card-title' }, '技師保留率 vs 同廠（百分點）', React.createElement('span', { className: 'hint' }, '紅＝低於門檻 ' + thresholds.retentionGapPct + ' 點、黃＝達一半、綠＝正常；套用上方篩選')),
+        diverging.length ? React.createElement(ChartCanvas, { type: 'bar', data: divData, height: Math.max(320, diverging.length * 22), options: { indexAxis: 'y', plugins: { legend: { display: false } } } }) : React.createElement('div', { className: 'empty-state' }, '目前篩選範圍內沒有有效技師。')
+      ),
+      React.createElement('div', { className: 'card', style: { marginTop: 14 } },
+        React.createElement('div', { className: 'card-title' }, '技師保留率管理清單',
+          React.createElement('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
+            React.createElement(Select, { value: scope, onChange: setScope, options: [{ value: 'all', label: '全部有效技師' }, { value: 'ng', label: '只看紅／黃燈' }] }),
+            React.createElement(Select, { value: sortKey, onChange: setSortKey, options: [{ value: 'vsPlant', label: '依 vs同廠（低→高）' }, { value: 'rateDesc', label: '依保留率（高→低）' }, { value: 'rateAsc', label: '依保留率（低→高）' }, { value: 'uio', label: '依定保對象數' }, { value: 'recover', label: '依可挽回台數' }] })
+          )
+        ),
+        React.createElement('div', { className: 'table-wrap' },
+          React.createElement('table', null,
+            React.createElement('thead', null, React.createElement('tr', null, ['服務廠', '技師', '定保對象(UIO)', '定保次數', '保留率', '同廠保留率', 'vs同廠(百分點)', '流失率', '可挽回台數', '狀態'].map(h => React.createElement('th', { key: h }, h)))),
+            React.createElement('tbody', null, shown.map(r => React.createElement('tr', { key: techKey(r.t), onClick: () => goTech(techKey(r.t)) },
+              React.createElement('td', null, r.t.plant), React.createElement('td', null, r.t.name),
+              React.createElement('td', { className: 'num-cell' }, fmtInt(r.uio)), React.createElement('td', { className: 'num-cell' }, fmtInt(r.main)),
+              React.createElement('td', { className: 'num-cell' }, fmtPct(r.rate, 1)), React.createElement('td', { className: 'num-cell' }, fmtPct(r.plantRate, 1)),
+              React.createElement('td', { className: 'num-cell' }, (r.vs >= 0 ? '+' : '') + (r.vs * 100).toFixed(1)),
+              React.createElement('td', { className: 'num-cell' }, fmtPct(r.churn, 1)), React.createElement('td', { className: 'num-cell' }, fmtInt(r.recover)),
+              React.createElement('td', null, React.createElement(RagBadge, { rag: r.rag }))
+            )))
+          )
+        )
       )
     )
   );
