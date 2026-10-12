@@ -1807,6 +1807,8 @@ function utilStatus(u, th) {
   if (pct >= th.utilHigh) return { rag: 'warn', label: '高負荷' };
   return { rag: 'good', label: '正常' };
 }
+// lift count of a plant in month m (monthly history if present, else the current count)
+function liftsAt(p, m) { return (p.liftsMonthly && p.liftsMonthly[m - 1] != null) ? p.liftsMonthly[m - 1] : (p.lifts || 0); }
 function techLaborOut(r) { return (r.self_labor || 0) + (r.comp_labor || 0) + (r.general_labor || 0); }
 
 function UtilizationPage({ filters, filteredTechs, thresholds, role, goTech, setFilters }) {
@@ -1864,7 +1866,8 @@ function UtilizationPage({ filters, filteredTechs, thresholds, role, goTech, set
     const nm = monthsInRange.length || 1;
     let intake = 0, labor = 0;
     all.forEach(t => monthsInRange.forEach(m => { const r = techMonthly(t, m); if (r && typeof r.count === 'number') { intake += r.count; labor += techLaborOut(r); } }));
-    return { plant: p.name, lifts: p.lifts, techs: all.length, ratio: all.length / p.lifts, spare: Math.max(0, p.lifts - all.length), perLift: intake / nm / p.lifts, hoursPerLift: labor / rate / nm / p.lifts };
+    const liftMonths = monthsInRange.reduce((a, m) => a + liftsAt(p, m), 0) || 1;
+    return { plant: p.name, lifts: p.lifts, avgLifts: liftMonths / nm, techs: all.length, ratio: all.length / p.lifts, spare: Math.max(0, p.lifts - all.length), perLift: intake / liftMonths, hoursPerLift: labor / rate / liftMonths };
   }).sort((a, b) => b.perLift - a.perLift), [visiblePlants, filters.from, filters.to, thresholds]);
   const liftAvg = mean(liftRows.map(r => r.perLift));
   const liftChart = {
@@ -1877,9 +1880,9 @@ function UtilizationPage({ filters, filteredTechs, thresholds, role, goTech, set
 
   // company-wide per-lift baseline (independent of role scope)
   const liftBase = useMemo(() => {
-    const nm = monthsInRange.length || 1; let intake = 0, lifts = 0;
-    PLANTS.filter(p => p.lifts > 0).forEach(p => { lifts += p.lifts; TECHS.filter(t => t.plant === p.name).forEach(t => monthsInRange.forEach(m => { const r = techMonthly(t, m); if (r && typeof r.count === 'number') intake += r.count; })); });
-    return lifts ? intake / nm / lifts : null;
+    let intake = 0, liftMonths = 0;
+    PLANTS.filter(p => p.lifts > 0).forEach(p => { monthsInRange.forEach(m => { liftMonths += liftsAt(p, m); }); TECHS.filter(t => t.plant === p.name).forEach(t => monthsInRange.forEach(m => { const r = techMonthly(t, m); if (r && typeof r.count === 'number') intake += r.count; })); });
+    return liftMonths ? intake / liftMonths : null;
   }, [filters.from, filters.to]);
   const companyAppt = (() => { const a = PLANTS.reduce((x, p) => x + (p.apptRate || 0) * p.totalCountYtd, 0), n = PLANTS.reduce((x, p) => x + p.totalCountYtd, 0); return n ? a / n : null; })();
   const companyRet = mean(PLANTS.map(p => p.retentionRate));
@@ -1905,7 +1908,7 @@ function UtilizationPage({ filters, filteredTechs, thresholds, role, goTech, set
     if (pr.spread * 100 >= 50) tips.push('廠內技師稼動落差達 ' + (pr.spread * 100).toFixed(0) + ' 百分點：派工不均，建議採輪派或依技能別平衡分配。');
     if (r.spare >= 2 && (q === 'B' || q === 'A')) tips.push('機位比技師多 ' + r.spare + ' 台：新增技師可直接使用現有機位。');
     if (q === 'D' || q === 'C') tips.push('進廠來源參考：指定率 ' + fmtPct(pl.apptRate, 1) + '（全體 ' + fmtPct(companyAppt, 1) + '）、定保保留率 ' + fmtPct(pl.retentionRate, 1) + '（各廠平均 ' + fmtPct(companyRet, 1) + '）。');
-    const room = Math.max(0, (liftBase - r.perLift) * r.lifts);
+    const room = Math.max(0, (liftBase - r.perLift) * r.avgLifts);
     return { r, pr, q, manIdx, liftIdx, tips, manRoom: pr.idle, liftRoom: room };
   }).filter(Boolean).sort((a, b) => 'DBCA'.indexOf(a.q) - 'DBCA'.indexOf(b.q) || a.manIdx - b.manIdx), [liftRows, plantRows, valid, liftBase, thresholds]);
 
@@ -1993,16 +1996,16 @@ function UtilizationPage({ filters, filteredTechs, thresholds, role, goTech, set
       React.createElement(ChartCanvas, { type: 'bar', data: liftChart, height: 280 }),
       React.createElement('div', { className: 'table-wrap', style: { marginTop: 12 } },
         React.createElement('table', null,
-          React.createElement('thead', null, React.createElement('tr', null, ['服務廠', '頂車機數', '技師數', '人機比(技師÷機)', '機多於人(台)', '每機月均接車(台)', '每機月均售出工時(h)', '每機售出工時÷標準出勤'].map(h => React.createElement('th', { key: h }, h)))),
+          React.createElement('thead', null, React.createElement('tr', null, ['服務廠', '頂車機數(現況)', '區間平均機數', '技師數', '人機比(技師÷現況機數)', '機多於人(台)', '每機月均接車(台)', '每機月均售出工時(h)', '每機售出工時÷標準出勤'].map(h => React.createElement('th', { key: h }, h)))),
           React.createElement('tbody', null, liftRows.map(r => React.createElement('tr', { key: r.plant },
-            React.createElement('td', null, r.plant), React.createElement('td', { className: 'num-cell' }, r.lifts), React.createElement('td', { className: 'num-cell' }, r.techs),
+            React.createElement('td', null, r.plant), React.createElement('td', { className: 'num-cell' }, r.lifts), React.createElement('td', { className: 'num-cell' }, fmtNum(r.avgLifts, 1)), React.createElement('td', { className: 'num-cell' }, r.techs),
             React.createElement('td', { className: 'num-cell' }, r.ratio.toFixed(2)), React.createElement('td', { className: 'num-cell' }, r.spare),
             React.createElement('td', { className: 'num-cell' }, fmtNum(r.perLift, 1)), React.createElement('td', { className: 'num-cell' }, fmtNum(r.hoursPerLift, 0)),
             React.createElement('td', { className: 'num-cell' }, fmtPct(r.hoursPerLift / stdHours, 0))
           )))
         )
       ),
-      React.createElement('p', { className: 'foot-note', style: { marginTop: 8 } }, '人機比＜1 代表機位多於技師、有閒置機位的空間；每機接車台數愈低，代表同樣的機台空間產出愈少。')
+      React.createElement('p', { className: 'foot-note', style: { marginTop: 8 } }, '人機比＜1 代表機位多於技師、有閒置機位的空間；每機接車台數愈低，代表同樣的機台空間產出愈少。每機產出以「逐月機數」計算（區間內各月機數加總），人機比與機位差則以現況機數計。' + (DATA.meta.liftsNote ? '機位異動：' + DATA.meta.liftsNote : ''))
     ) : null,
     tab === 'tech' ? React.createElement(React.Fragment, null,
       React.createElement('div', { className: 'card' },
