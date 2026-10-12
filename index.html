@@ -1119,6 +1119,27 @@ function RosterPage({ filteredTechs, filters, thresholds, goTech }) {
 }
 
 /* ---------------- Technician detail ---------------- */
+// per-technician utilization (proxy) over all months; shared by the personal-analysis page
+function techUtilSummary(t, thr) {
+  const full = thr.utilFullLoad > 0 ? thr.utilFullLoad : 106;
+  const rate = thr.utilRate > 0 ? thr.utilRate : 750;
+  const std = thr.utilStdHours > 0 ? thr.utilStdHours : 176;
+  const per = {}, cnts = [], labs = [];
+  MONTHS.forEach(m => {
+    const r = techMonthly(t, m);
+    if (r && typeof r.count === 'number' && r.count > 0) { cnts.push(r.count); labs.push((r.self_labor || 0) + (r.comp_labor || 0) + (r.general_labor || 0)); per[m] = r.count / full; }
+  });
+  const avgIntake = mean(cnts), avgLabor = mean(labs);
+  const util = avgIntake == null ? null : avgIntake / full;
+  const enough = hasEnoughSample(t) && util != null;
+  const sd = cnts.length > 1 ? Math.sqrt(cnts.reduce((a, c) => a + Math.pow(c - avgIntake, 2), 0) / cnts.length) : null;
+  return {
+    per, util, enough, st: enough ? utilStatus(util, thr) : { rag: 'gray', label: '無資料' },
+    hours: avgLabor == null ? null : avgLabor / rate, hourEff: avgLabor == null ? null : avgLabor / rate / std,
+    low: Object.values(per).filter(u => u * 100 < thr.utilLow).length, cv: sd != null && avgIntake ? sd / avgIntake : null, months: cnts.length,
+  };
+}
+
 function TechDetailPage({ techKey: selKey, setTechKey, thresholds, role }) {
   const options = role.role === 'tech' ? TECHS.filter(t => techKey(t) === role.techKey) : TECHS;
   const tech = options.find(t => techKey(t) === selKey) || options[0];
@@ -1177,6 +1198,25 @@ function TechDetailPage({ techKey: selKey, setTechKey, thresholds, role }) {
     datasets: [{ data: MILEAGE_BUCKET_DEFS.map(b => +(tech.mileageBuckets[b.key] * 100).toFixed(1)), backgroundColor: th.series.slice(0, 4), borderColor: getCssVar('--bg-surface') || '#fff', borderWidth: 2 }]
   } : null;
 
+  const ut = techUtilSummary(tech, thresholds);
+  const utPeers = list => mean(list.filter(t => t.qualification === '正式戰力').map(t => techUtilSummary(t, thresholds)).filter(s => s.enough).map(s => s.util));
+  const utPlantAvg = utPeers(plantPeers), utCompanyAvg = utPeers(TECHS);
+  const utRank = (() => { const arr = plantPeers.map(t => ({ t, s: techUtilSummary(t, thresholds) })).filter(x => x.s.enough).sort((a, b) => b.s.util - a.s.util); const i = arr.findIndex(x => x.t === tech); return i < 0 ? null : (i + 1) + ' / ' + arr.length; })();
+  const utMonths = MONTHS.filter(m => ut.per[m] != null);
+  const utTrend = {
+    labels: utMonths.map(m => MONTH_LABELS[m - 1]),
+    datasets: [
+      { label: '接車稼動率(%)', data: utMonths.map(m => +(ut.per[m] * 100).toFixed(1)), borderColor: th.accent, backgroundColor: th.accent, tension: .3, borderWidth: 2.5, pointRadius: 3 },
+      { label: '黃燈門檻(%)', data: utMonths.map(() => thresholds.utilWarn), borderColor: th.warning, borderWidth: 1.5, borderDash: [5, 4], pointRadius: 0 },
+      { label: '紅燈門檻(%)', data: utMonths.map(() => thresholds.utilLow), borderColor: th.critical, borderWidth: 1.5, borderDash: [2, 3], pointRadius: 0 },
+    ]
+  };
+  const utCompare = {
+    labels: ['本人', '同廠平均', '全公司平均'],
+    datasets: [{ label: '接車稼動率(%)', data: [ut.util, utPlantAvg, utCompanyAvg].map(v => v == null ? null : +(v * 100).toFixed(1)), backgroundColor: [th.accent, th.series[0], th.series[2]], borderRadius: 4 }]
+  };
+  const utAxis = { y: { min: 0, ticks: { callback: v => v + '%', color: th.muted }, grid: { color: th.grid } } };
+
   const compareBar = {
     labels: ['本人', '同廠平均', '全公司平均', '同年資平均'],
     datasets: [{ label: '單台營收(元)', data: [tech.weightedRevPerUnit, tech.plantAvgRevPerUnit, companyAvg.rev, tenureAvg.rev].map(v => v ? Math.round(v) : null), backgroundColor: [th.accent, th.series[0], th.series[2], th.series[4]], borderRadius: 4 }]
@@ -1212,6 +1252,11 @@ function TechDetailPage({ techKey: selKey, setTechKey, thresholds, role }) {
           React.createElement(Kpi, { label: '一般營收指數', value: tech.generalIndex, formatter: v => fmtNum(v, 1) }),
           React.createElement(Kpi, { label: '指定率（1E0）', value: tech.apptRate, formatter: v => fmtPct(v, 1) }),
           React.createElement(Kpi, { label: '指定預約筆數', value: tech.apptCount, formatter: fmtInt }),
+          React.createElement(Kpi, { label: '接車稼動率（代理）', value: ut.util, formatter: v => fmtPct(v, 1) }),
+          React.createElement(Kpi, { label: '稼動狀態', value: ut.st, formatter: v => React.createElement(RagBadge, { rag: v.rag, label: v.label }) }),
+          React.createElement(Kpi, { label: '低稼動月數（<' + thresholds.utilLow + '%）', value: ut.enough ? ut.low + ' / ' + ut.months : null, formatter: v => v == null ? '—' : v }),
+          React.createElement(Kpi, { label: '月均售出工時（h）', value: ut.hours, formatter: v => fmtNum(v, 0) }),
+          React.createElement(Kpi, { label: '工時產出率（售出÷標準出勤）', value: ut.hourEff, formatter: v => fmtPct(v, 0) }),
           React.createElement(Kpi, { label: 'YTD 總營收', value: tech.totalRevenue, formatter: fmtMoney }),
           React.createElement(Kpi, { label: '月均接車台數', value: tech.avgMonthlyIntake, formatter: v => fmtNum(v, 1) }),
           React.createElement(Kpi, { label: '月均營收', value: tech.avgMonthlyIntake * tech.weightedRevPerUnit, formatter: fmtMoney }),
@@ -1238,6 +1283,16 @@ function TechDetailPage({ techKey: selKey, setTechKey, thresholds, role }) {
     React.createElement('div', { className: 'grid grid-2', style: { marginTop: 14 } },
       React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '接車台數推移（月）'), React.createElement(ChartCanvas, { type: 'line', data: trendData, height: 260 })),
       React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '單台營收推移（月）'), React.createElement(ChartCanvas, { type: 'line', data: revTrend, height: 260 }))
+    ),
+    React.createElement('div', { className: 'grid grid-2', style: { marginTop: 14 } },
+      React.createElement('div', { className: 'card' },
+        React.createElement('div', { className: 'card-title' }, '接車稼動率推移（月）', React.createElement('span', { className: 'hint' }, '月接車台數 ÷ 滿載基準 ' + (thresholds.utilFullLoad || 106) + ' 台；代理指標')),
+        utMonths.length ? React.createElement(ChartCanvas, { type: 'line', data: utTrend, height: 260, options: { scales: utAxis } }) : React.createElement('div', { className: 'empty-state' }, '沒有接車資料')
+      ),
+      React.createElement('div', { className: 'card' },
+        React.createElement('div', { className: 'card-title' }, '稼動率比較', React.createElement('span', { className: 'hint' }, ut.enough ? '廠內稼動排名：第 ' + utRank + ' 名（正式戰力）' : '觀察期／資料不足，不列入比較')),
+        React.createElement(ChartCanvas, { type: 'bar', data: utCompare, height: 260, options: { plugins: { legend: { display: false } }, scales: utAxis } })
+      )
     ),
     React.createElement('div', { className: 'grid grid-2', style: { marginTop: 14 } },
       React.createElement('div', { className: 'card' }, React.createElement('div', { className: 'card-title' }, '工資占比 / 補償營收占比推移'), React.createElement(ChartCanvas, { type: 'line', data: mixTrend, height: 260, options: { scales: { y: { ticks: { callback: v => (v * 100).toFixed(0) + '%', color: chartTheme().muted }, grid: { color: chartTheme().grid } } } } })),
