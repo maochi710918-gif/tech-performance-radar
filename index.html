@@ -250,7 +250,7 @@ const OVERALL = DATA.overall;
 
 // derive revenue-composition ratios once, from the real 自費／補償 breakdown
 PLANTS.forEach(p => {
-  p.compRevenueRatio = p.totalRevenue8 > 0 ? p.compRevenue / p.totalRevenue8 : null;
+  p.compRevenueRatio = p.totalRevenueYtd > 0 ? p.compRevenue / p.totalRevenueYtd : null;
   p.csiOverall = p.csi ? p.csi.overall : null;
   p.csiCheckout = p.csi ? p.csi.checkout : null;
   p.mileageBuckets = mileageBucketsFromPct(p.mileagePct);
@@ -278,7 +278,7 @@ TECHS.forEach(t => {
   t.retentionRate = t.retention ? t.retention.rate : null;
   t.retentionVsPlant = t.retention ? t.retention.vsPlant : null;
 });
-[...TECHS].sort((a, b) => (b.compositeIndex || 0) - (a.compositeIndex || 0)).forEach((t, i) => { t.companyRank = i + 1; });
+const RANKED_COUNT = TECHS.filter(t => t.companyRank != null).length;
 
 const TENURE_BUCKETS = [
   { key: 'lt1', label: '未滿1年', test: t => t < 1 },
@@ -290,7 +290,7 @@ const TENURE_BUCKETS = [
 ];
 const tenureBucketOf = t => (TENURE_BUCKETS.find(b => b.test(t)) || {}).key;
 
-const TYPE_OPTIONS = ['核心戰力', '高產能', '高產值', '需改善', '觀察期'];
+const TYPE_OPTIONS = ['核心主力', '產能營收型', '產值營收型', '穩定戰力', '需改善', '觀察期', '資料不足'];
 const QUAL_OPTIONS = ['正式戰力', '觀察期'];
 
 const DEFAULT_THRESHOLDS = {
@@ -366,7 +366,7 @@ function worstOf(...tags) {
   if (!real.length) return 'gray';
   return real.reduce((a, b) => SEV_RANK[b] > SEV_RANK[a] ? b : a, real[0]);
 }
-function hasEnoughSample(t) { return t.effectiveMonths == null || t.effectiveMonths >= 2; }
+function hasEnoughSample(t) { return t.effectiveMonths == null || t.effectiveMonths >= 3; }
 
 function techOverallRag(t, th) {
   if (!hasEnoughSample(t)) return 'gray';
@@ -413,6 +413,7 @@ function techAlerts(t, th) {
     flags.push({ sev: 'warn', label: '新進技師績效成長速度低於預期' });
   }
   if (availableMonths(t).length < 3) flags.push({ sev: 'gray', label: '有效上線月數不足，資料樣本偏少' });
+  if (t.generalStatus && t.generalStatus !== '完整') flags.push({ sev: 'gray', label: '一般營收資料：' + t.generalStatus });
   return flags;
 }
 
@@ -541,19 +542,21 @@ function ExportModal({ title, headers, rows, onClose }) {
 
 /* ---------------- glossary ---------------- */
 const METRIC_GLOSSARY = [
-  { title: '綜合戰力指數', desc: '以「同廠正式戰力技師」平均為 100，由接車產能指數（權重35%）、單車產值指數（35%）、工資能力指數（30%）加權計算，用來比較同廠技師的整體戰力水準。' },
-  { title: '接車產能指數', desc: '技師月均接車台數 ÷ 同廠正式戰力平均月接車台數 × 100，數值愈高代表接車量相對同廠愈高。' },
-  { title: '單車產值指數', desc: '技師加權單台營收 ÷ 同廠正式戰力平均單台營收 × 100，反映每台車創造營收的相對水準。' },
-  { title: '工資能力指數', desc: '技師平均工資占比 ÷ 同廠平均工資占比 × 100。原始資料無出勤／銷售工時欄位，故以此指數作為「工時效率」的代理指標。' },
-  { title: '單台營收', desc: '（自費營收＋補償營收）÷ 進廠台次。每月直接依當月實績計算，1–8月整體則採「加權單台營收」（依各有效月台次加權），避免單月台數過少造成失真。' },
+  { title: '綜合戰力指數（整合綜合戰力）', desc: '以「全體共同基準」（裕信15廠技師）為 100，由產能指數（28%）、產值指數（28%）、工資能力指數（24%）、一般營收指數（20%）加權計算。全體排名使用同一共同基準，不分區；「全國排名（裕信母體）」的母體是本報表裕信15廠技師，不代表 NISSAN 全國所有經銷商。' },
+  { title: '產能指數', desc: '技師月均接車台數 ÷ 全體月均接車（約 91.8 台）× 100，數值愈高代表接車量愈高。' },
+  { title: '產值指數', desc: '技師加權單台營收 ÷ 全體單台營收（約 NT$8,914）× 100，反映每台車創造營收的相對水準。' },
+  { title: '工資能力指數', desc: '技師平均工資占比 ÷ 全體工資比（約 19.4%）× 100。原始資料無出勤／銷售工時欄位，故以此指數作為「工時效率」的代理指標。' },
+  { title: '一般營收／一般營收指數', desc: '來自 ESSS 的一般營收（含一般工資、一般零件），按月彙整。月均一般營收 ÷ 全體月均一般營收（約 NT$447,312）× 100 即為一般營收指數。部分技師的一般營收月份缺資料，資料狀態會在異常提醒中以灰燈標示。' },
+  { title: '指定預約筆數／指定率', desc: '來自 1E0 指定預約資料：客戶指定該技師的預約筆數，指定率＝指定預約筆數 ÷ 接車台數，反映客戶主動指名的黏著度。' },
+  { title: '單台營收', desc: '（自費營收＋補償營收）÷ 進廠台次。每月直接依當月實績計算，1–9月整體則採「加權單台營收」（依各有效月台次加權），避免單月台數過少造成失真。' },
   { title: '台數（進廠台次）', desc: '205系統中每筆自費／補償明細計 1 台次；同一輛車同月若實際進廠 2 次，計 2 台次。是實際車輛進廠次數，不是金額。' },
   { title: '月均營收／人均月營收', desc: '技師個人頁的「月均營收」是該技師自己每個月創造的營收；各廠績效頁的「人均月營收」則是該廠「平均每一位技師」每個月創造的營收（＝該廠月均台數 ÷ 技師人數 × 單台營收），不是全廠加總的營收規模。與「單台營收」不同：單台營收是每一台車的平均產值，月均／人均營收則是月營收規模，兩者相乘的關係可用來判斷是靠「量多」還是「單台產值高」創造營收。' },
   { title: '工資營收占比', desc: '（自費工資＋補償工資）÷ 總營收 × 100%。用來檢視營收結構中工資的占比是否合理。' },
   { title: '自費營收 / 補償營收', desc: '自費營收是客戶自行付費的維修營收；補償營收是原廠／保固體系補償技師的營收（不向客戶收費）。兩者相加＝總營收。補償營收占比可視為「非自費」業務的相對指標。' },
   { title: '零件 / 外修', desc: '零件＝自費與補償維修中使用的零件費用；外修（外修合計）僅出現在自費項目中，指外包給廠外的鈑金／烤漆等項目費用。三者（工資、零件、外修）合計即為總營收。' },
   { title: '月均', desc: '所選「分析區間」內的加總數值 ÷ 區間內月數，用來排除月份長短造成的比較失真，方便跨區間比較。' },
-  { title: '戰力資格（正式戰力／觀察期）', desc: '1–8月有效上線月份達 3 個月以上才列入「正式戰力」比較基準；未滿 3 個月列為「觀察期」，暫不納入同廠平均計算。' },
-  { title: '戰力類型（核心戰力／高產能／高產值／需改善）', desc: '產能、產值皆≥100為核心戰力；僅產能≥100為高產能；僅產值≥100為高產值；兩者皆<100為需改善。用於快速辨識技師的戰力特徵。' },
+  { title: '戰力資格（正式戰力／觀察期）', desc: '1–9月有效上線月份達 3 個月以上才列入「正式戰力」；未滿 3 個月列為「觀察期」。另有技師因資料不足無法排名（「資料不足」）。' },
+  { title: '戰力類型（整合戰力類型）', desc: '由來源檔案依整合後的四項指數與全體基準判定，分為核心主力、產能營收型、產值營收型、穩定戰力、需改善；樣本不足者為觀察期／資料不足。各類別的細部判定門檻以來源檔案為準，本儀表板直接引用，不另行重算。' },
   { title: '定保保留率', desc: '該技師於 2025 年最後一次定保的車輛（UIO），在 2026 年仍回廠定保的比例，反映客戶對該技師的黏著度。僅納入 2025 年定保工單 > 200 台的「有效技師」，且須與技師名單（廠別＋姓名）比對成功；比對不到或樣本特別少的不列入（顯示「—」）。「vs 同廠」＝技師保留率 − 該廠保留率（百分點）。' },
   { title: '3萬以下／5萬以上／10萬以上（里程）', desc: '技師接車里程區間百分比資料為「累計門檻」占比，例如「5萬以上」代表該技師接的車輛中，里程數達5萬公里以上（含10萬以上）的比例，並非互斥區間，因此三個數字加總不會是100%。維修里程分析頁另外用這三個數字換算出「3–5萬」「5–10萬」兩個互斥區間，方便畫成合計100%的圓餅圖。此資料為2026年1–8月整體區間的單一統計，不隨月份篩選變動。' },
 ];
@@ -567,7 +570,7 @@ function alertGlossary(th) {
     { title: '接車台數／單台營收連續2個月下滑', desc: '最近兩個月的數值呈現連續下降趨勢，提醒留意近期表現。' },
     { title: '高年資但綜合戰力低於同年資水準', desc: '年資達到目前設定門檻（' + th.seniorYears + ' 年以上），但綜合戰力指數仍低於黃燈門檻，顯示資深技師績效低於預期。' },
     { title: '新進技師績效成長速度低於預期', desc: '到職未滿目前設定年限（' + th.newHireYears + ' 年），但綜合戰力指數尚未達到黃燈門檻，顯示上手速度偏慢。' },
-    { title: '有效上線月數不足，資料樣本不足以判定戰力', desc: '有效上線月數少於 2 個月，樣本太少無法可靠評估績效，暫列為灰燈「無資料」，不計入紅／黃燈統計。' },
+    { title: '有效上線月數不足，資料樣本不足以判定戰力', desc: '有效上線月數少於 3 個月（即「觀察期」），樣本太少無法可靠評估績效，暫列為灰燈「無資料」，不計入紅／黃燈統計。' },
   ];
 }
 function GlossaryModal({ thresholds, onClose }) {
@@ -585,7 +588,7 @@ function GlossaryModal({ thresholds, onClose }) {
       ))
     ),
     React.createElement('p', { className: 'foot-note', style: { marginTop: 14 } }, '燈號說明：', React.createElement(RagBadge, { rag: 'good' }), ' 達標　', React.createElement(RagBadge, { rag: 'warn' }), ' 接近門檻　', React.createElement(RagBadge, { rag: 'critical' }), ' 異常　', React.createElement(RagBadge, { rag: 'gray' }), ' 無資料。門檻值可於「指標與門檻設定」頁調整。'),
-    React.createElement('p', { className: 'foot-note', style: { marginTop: 8 } }, '資料來源：', DATA.meta.sourceFile, '（自費／補償財務實績＋進廠里程區間占比；戰力分析以接車產能、單車產值、工資能力三項組成，不做保固結構校正；里程區間為2026年1–8月整體單一統計，不按月拆分）。')
+    React.createElement('p', { className: 'foot-note', style: { marginTop: 8 } }, '資料來源：', DATA.meta.sourceFile, '（205自費／補償＋ESSS一般營收＋1E0指定預約，1–9月逐月整合；戰力由產能、產值、工資能力、一般營收四項組成，不做保固結構校正）；進廠里程區間沿用 ', DATA.meta.mileageSource, '（1–8月整體單一統計，不按月拆分，新檔未提供）。')
   );
 }
 function GlossaryButton({ thresholds }) {
@@ -598,7 +601,7 @@ function GlossaryButton({ thresholds }) {
 
 /* ---------------- global filter context ---------------- */
 function defaultFilters() {
-  return { plant: 'all', tenure: 'all', qualification: 'all', type: 'all', search: '', from: 1, to: 8, kpiMonth: 8 };
+  return { plant: 'all', tenure: 'all', qualification: 'all', type: 'all', search: '', from: 1, to: MONTHS[MONTHS.length - 1], kpiMonth: MONTHS[MONTHS.length - 1] };
 }
 
 function applyRoleScope(filters, role) {
@@ -621,17 +624,19 @@ function filterTechs(techs, f, skipDims) {
 
 /* ---------------- aggregate KPI builder ---------------- */
 function aggregateForPeriod(techs, month) {
-  let intake = 0, revenue = 0, compRevenue = 0, laborNum = 0, laborDen = 0;
+  let intake = 0, revenue = 0, compRevenue = 0, laborNum = 0, laborDen = 0, general = 0, appt = 0;
   techs.forEach(t => {
     const r = techMonthly(t, month);
     if (!r || typeof r.count !== 'number') return;
     intake += r.count;
+    if (typeof r.general_revenue === 'number') general += r.general_revenue;
+    if (typeof r.appt_count === 'number') appt += r.appt_count;
     if (typeof r.total_revenue === 'number') revenue += r.total_revenue;
     if (typeof r.comp_revenue === 'number') compRevenue += r.comp_revenue;
     if (typeof r.labor_ratio === 'number') { laborNum += r.labor_ratio * r.count; laborDen += r.count; }
   });
   return {
-    techCount: techs.length, intake, revenue, compRevenue,
+    techCount: techs.length, intake, revenue, compRevenue, general, apptRate: intake > 0 ? appt / intake : null,
     avgRevPerUnit: intake > 0 ? revenue / intake : null,
     avgLaborRatio: laborDen > 0 ? laborNum / laborDen : null,
     avgCompRatio: revenue > 0 ? compRevenue / revenue : null,
@@ -754,7 +759,7 @@ function App() {
     React.createElement('div', { className: 'main' },
       React.createElement('div', { className: 'topbar' },
         React.createElement('div', { className: 'page-title' }, titleMap[page]),
-        React.createElement('div', { className: 'page-sub' }, '2026年1–8月 技師戰力分析｜同廠正式戰力平均基準 = 100｜資料含 ' + PLANTS.length + ' 廠、' + OVERALL['總技師數'] + ' 位技師｜自費／補償財務實績（205系統）'),
+        React.createElement('div', { className: 'page-sub' }, '2026年1–9月 技師戰力分析｜全體共同基準 = 100（裕信母體）｜資料含 ' + PLANTS.length + ' 廠、' + OVERALL['總技師數'] + ' 位技師｜205自費／補償＋ESSS一般營收＋1E0指定率'),
         (page !== 'settings' && page !== 'roles' && page !== 'import') ? React.createElement(GlobalFilterBar, { filters, setFilters, role }) : null
       ),
       React.createElement('div', { className: 'content' }, pageEl)
@@ -839,8 +844,8 @@ function OverviewPage({ filteredTechs, filters, thresholds, goTech }) {
 
   const typeDonut = useMemo(() => {
     const th = chartTheme();
-    const order = ['核心戰力', '高產能', '高產值', '需改善', '觀察期'];
-    const colors = [th.series[0], th.series[2], th.series[3], th.critical, th.muted];
+    const order = ['核心主力', '產能營收型', '產值營收型', '穩定戰力', '需改善', '觀察期', '資料不足'];
+    const colors = [th.series[0], th.series[2], th.series[3], th.series[4], th.critical, th.muted, th.muted];
     return { labels: order, datasets: [{ data: order.map(k => counts.type[k] || 0), backgroundColor: colors, borderColor: getCssVar('--bg-surface') || '#fff', borderWidth: 2 }] };
   }, [counts]);
 
@@ -858,13 +863,15 @@ function OverviewPage({ filteredTechs, filters, thresholds, goTech }) {
       React.createElement(Kpi, { label: '平均單台營收', value: cur.avgRevPerUnit, prevValue: prev.avgRevPerUnit, deltaPct: deltaPct(cur.avgRevPerUnit, prev.avgRevPerUnit), formatter: fmtMoney }),
       React.createElement(Kpi, { label: '工資營收占比', value: cur.avgLaborRatio, prevValue: prev.avgLaborRatio, deltaPct: deltaPct(cur.avgLaborRatio, prev.avgLaborRatio), formatter: v => fmtPct(v, 1) }),
       React.createElement(Kpi, { label: '補償營收占比', value: cur.avgCompRatio, prevValue: prev.avgCompRatio, deltaPct: deltaPct(cur.avgCompRatio, prev.avgCompRatio), higherIsBetter: false, formatter: v => fmtPct(v, 1) }),
+      React.createElement(Kpi, { label: MONTH_LABELS[filters.kpiMonth - 1] + ' 一般營收（ESSS）', value: cur.general, prevValue: prev.general, deltaPct: deltaPct(cur.general, prev.general), formatter: fmtMoney }),
+      React.createElement(Kpi, { label: '指定率（指定預約÷接車）', value: cur.apptRate, prevValue: prev.apptRate, deltaPct: deltaPct(cur.apptRate, prev.apptRate), formatter: v => fmtPct(v, 1) }),
       React.createElement(Kpi, { label: '分析區間累計台數', value: cumulative.intake, formatter: fmtInt }),
       React.createElement(Kpi, { label: '月均接車台數', value: cumulative.avgIntake, formatter: v => fmtNum(v, 1) }),
       React.createElement(Kpi, { label: '月均營收', value: cumulative.avgRevenue, formatter: fmtMoney })
     ),
     React.createElement('div', { className: 'grid grid-kpi', style: { marginTop: 14 } },
       React.createElement(Kpi, { label: '正式戰力／觀察期', value: (counts.qual['正式戰力'] || 0) + ' / ' + (counts.qual['觀察期'] || 0), formatter: v => v }),
-      React.createElement(Kpi, { label: '核心戰力人數', value: counts.type['核心戰力'] || 0, formatter: fmtInt }),
+      React.createElement(Kpi, { label: '核心主力人數', value: counts.type['核心主力'] || 0, formatter: fmtInt }),
       React.createElement(Kpi, { label: '需改善人數', value: counts.type['需改善'] || 0, formatter: fmtInt }),
       React.createElement(Kpi, { label: '異常警示（紅／黃燈）', value: alertCounts.red + ' / ' + alertCounts.yellow, formatter: v => v })
     ),
@@ -940,10 +947,11 @@ function PlantsPage({ onOpenPlant, thresholds, role, filteredTechs, filters }) {
 
   const cols = [
     ['name', '廠別'], ['techCount', '技師數'], ['formal', '正式戰力'], ['observation', '觀察期'],
-    ['core', '核心戰力'], ['highVolume', '高產能'], ['highValue', '高產值'], ['needsImprovement', '需改善'],
+    ['core', '核心主力'], ['highVolume', '產能營收型'], ['highValue', '產值營收型'], ['stable', '穩定戰力'], ['needsImprovement', '需改善'],
     ['coreRate', '核心率'], ['avgMonthlyIntake', '人均月接車'], ['avgRevPerUnit', '單台營收'], ['avgMonthlyRevenue', '人均月營收'],
     ['avgLaborRatio', '工資比'], ['compRevenueRatio', '補償營收占比'], ['compCount', '補償筆數'],
     ['csiOverall', 'CSI整體滿意度'], ['csiCheckout', 'CSI結帳(出納)'], ['retentionRate', '定保保留率'],
+    ['generalMonthlyAvg', '人均月一般營收'], ['apptRate', '指定率'],
   ];
 
   return React.createElement('div', null,
@@ -968,9 +976,9 @@ function PlantsPage({ onOpenPlant, thresholds, role, filteredTechs, filters }) {
           React.createElement('tbody', null, rows.map(p => React.createElement('tr', { key: p.name, onClick: () => onOpenPlant(p.name) },
             cols.map(([k]) => {
               let v = p[k];
-              const isPct = ['coreRate', 'avgLaborRatio', 'compRevenueRatio', 'retentionRate'].includes(k);
-              const isMoney = k === 'avgRevPerUnit' || k === 'avgMonthlyRevenue';
-              const isInt = k === 'compCount';
+              const isPct = ['coreRate', 'avgLaborRatio', 'compRevenueRatio', 'retentionRate', 'apptRate'].includes(k);
+              const isMoney = k === 'avgRevPerUnit' || k === 'avgMonthlyRevenue' || k === 'generalMonthlyAvg';
+              const isInt = ['compCount', 'techCount', 'formal', 'observation', 'core', 'highVolume', 'highValue', 'stable', 'needsImprovement'].includes(k);
               const isCsi = k === 'csiOverall' || k === 'csiCheckout';
               const isNum = typeof v === 'number' && !isPct && !isMoney && !isInt && !isCsi;
               return React.createElement('td', { key: k, className: (isPct || isMoney || isNum || isInt || isCsi) ? 'num-cell' : '' },
@@ -1027,13 +1035,16 @@ const ROSTER_COLS = [
   { key: 'qualification', label: '戰力資格' },
   { key: 'type', label: '戰力類型' },
   { key: 'plantRank', label: '廠內排名', num: true },
-  { key: 'companyRank', label: '全公司排名', num: true },
+  { key: 'companyRank', label: '全國排名(裕信母體)', num: true },
+  { key: 'generalMonthlyAvg', label: '月均一般營收', fmt: fmtMoney, num: true },
+  { key: 'generalIndex', label: '一般營收指數', fmt: v => fmtNum(v, 1), num: true },
+  { key: 'apptRate', label: '指定率', fmt: v => fmtPct(v, 1), num: true },
   { key: 'csiOverall', label: 'CSI整體滿意度', fmt: v => fmtNum(v, 2), num: true },
   { key: 'csiRepair', label: 'CSI保修滿意度', fmt: v => fmtNum(v, 2), num: true },
   { key: 'retentionRate', label: '定保保留率', fmt: v => fmtPct(v, 1), num: true },
   { key: 'retentionVsPlant', label: '保留率vs同廠(百分點)', fmt: v => v == null ? '—' : (v >= 0 ? '+' : '') + (v * 100).toFixed(1), num: true },
 ];
-const ROSTER_DEFAULT_VISIBLE = ['plant', 'name', 'tenure', 'avgMonthlyIntake', 'weightedRevPerUnit', 'avgMonthlyRevenue', 'avgLaborRatio', 'compRevenueRatio', 'compositeIndex', 'qualification', 'type', 'plantRank', 'companyRank', 'csiOverall', 'csiRepair', 'retentionRate'];
+const ROSTER_DEFAULT_VISIBLE = ['plant', 'name', 'tenure', 'avgMonthlyIntake', 'weightedRevPerUnit', 'avgMonthlyRevenue', 'avgLaborRatio', 'compRevenueRatio', 'compositeIndex', 'qualification', 'type', 'plantRank', 'companyRank', 'generalMonthlyAvg', 'apptRate', 'csiOverall', 'csiRepair', 'retentionRate'];
 
 function RosterPage({ filteredTechs, filters, thresholds, goTech }) {
   const [sort, setSort] = useState({ key: 'compositeIndex', dir: -1 });
@@ -1179,15 +1190,19 @@ function TechDetailPage({ techKey: selKey, setTechKey, thresholds, role }) {
         React.createElement('div', { className: 'stat-row' }, React.createElement('span', null, '證照 / 職級代碼'), React.createElement('b', null, tech.license || '—')),
         React.createElement('div', { className: 'stat-row' }, React.createElement('span', null, '有效上線月數'), React.createElement('b', null, tech.effectiveMonths)),
         React.createElement('div', { className: 'stat-row' }, React.createElement('span', null, '戰力資格 / 類型'), React.createElement('b', null, tech.qualification + ' · ' + tech.type)),
-        React.createElement('div', { className: 'stat-row' }, React.createElement('span', null, '廠內戰力排名'), React.createElement('b', null, '第 ' + tech.plantRank + ' 名')),
-        React.createElement('div', { className: 'stat-row' }, React.createElement('span', null, '全公司戰力排名'), React.createElement('b', null, '第 ' + tech.companyRank + ' / ' + TECHS.length + ' 名')),
+        React.createElement('div', { className: 'stat-row' }, React.createElement('span', null, '廠內戰力排名'), React.createElement('b', null, tech.plantRank ? '第 ' + tech.plantRank + ' 名' : '—')),
+        React.createElement('div', { className: 'stat-row' }, React.createElement('span', null, '全國排名（裕信母體）'), React.createElement('b', null, tech.companyRank ? '第 ' + tech.companyRank + ' / ' + RANKED_COUNT + ' 名' : '不列入排名')),
         React.createElement('div', { className: 'divider' }),
         React.createElement('div', { className: 'foot-note' }, React.createElement('b', null, '管理判讀：'), tech.verdict)
       ),
       React.createElement('div', { className: 'card', style: { gridColumn: 'span 2' } },
-        React.createElement('div', { className: 'card-title' }, '核心指標與比較基準（YTD 1–8月）'),
+        React.createElement('div', { className: 'card-title' }, '核心指標與比較基準（YTD 1–9月）'),
         React.createElement('div', { className: 'grid grid-kpi' },
-          React.createElement(Kpi, { label: 'YTD 接車台數', value: tech.totalCount8, formatter: fmtInt }),
+          React.createElement(Kpi, { label: 'YTD 接車台數', value: tech.totalCountYtd, formatter: fmtInt }),
+          React.createElement(Kpi, { label: '月均一般營收（ESSS）', value: tech.generalMonthlyAvg, formatter: fmtMoney }),
+          React.createElement(Kpi, { label: '一般營收指數', value: tech.generalIndex, formatter: v => fmtNum(v, 1) }),
+          React.createElement(Kpi, { label: '指定率（1E0）', value: tech.apptRate, formatter: v => fmtPct(v, 1) }),
+          React.createElement(Kpi, { label: '指定預約筆數', value: tech.apptCount, formatter: fmtInt }),
           React.createElement(Kpi, { label: 'YTD 總營收', value: tech.totalRevenue, formatter: fmtMoney }),
           React.createElement(Kpi, { label: '月均接車台數', value: tech.avgMonthlyIntake, formatter: v => fmtNum(v, 1) }),
           React.createElement(Kpi, { label: '月均營收', value: tech.avgMonthlyIntake * tech.weightedRevPerUnit, formatter: fmtMoney }),
@@ -1320,7 +1335,7 @@ function MileagePage({ filteredTechs, role, thresholds }) {
     const sums = { u30: 0, m30_50: 0, m50_100: 0, o100: 0 };
     let weight = 0;
     withMileage.forEach(t => {
-      const w = t.totalCount8 || 1;
+      const w = t.totalCountYtd || 1;
       MILEAGE_BUCKET_DEFS.forEach(b => { sums[b.key] += (t.mileageBuckets[b.key] || 0) * w; });
       weight += w;
     });
@@ -1434,7 +1449,7 @@ function TrendPage({ filteredTechs, role }) {
   const th = chartTheme();
   const [metric, setMetric] = useState('intake');
   const [compareMode, setCompareMode] = useState('plant');
-  const metricLabels = { intake: '接車台數', rev: '單台營收', labor: '工資占比', comp: '補償營收占比' };
+  const metricLabels = { intake: '接車台數', rev: '單台營收', labor: '工資占比', comp: '補償營收占比', general: '一般營收（ESSS）', appt: '指定率（1E0）' };
 
   function seriesFor(techs) {
     return MONTHS.map(m => {
@@ -1442,6 +1457,8 @@ function TrendPage({ filteredTechs, role }) {
       if (metric === 'intake') return agg.intake;
       if (metric === 'rev') return agg.avgRevPerUnit;
       if (metric === 'labor') return agg.avgLaborRatio;
+      if (metric === 'general') return agg.general;
+      if (metric === 'appt') return agg.apptRate;
       return agg.avgCompRatio;
     });
   }
@@ -1456,7 +1473,7 @@ function TrendPage({ filteredTechs, role }) {
   if (compareMode === 'company' || compareMode === 'both') datasets.push({ label: '全公司平均', data: companySeries, borderColor: th.series[2], backgroundColor: th.series[2], borderWidth: 2, tension: .3, pointRadius: 3, borderDash: [2, 2] });
 
   const lineData = { labels: MONTH_LABELS, datasets };
-  const isPctMetric = metric === 'labor' || metric === 'comp';
+  const isPctMetric = metric === 'labor' || metric === 'comp' || metric === 'appt';
 
   return React.createElement('div', null,
     React.createElement('div', { className: 'filter-bar', style: { marginTop: 0, marginBottom: 14 } },
@@ -1468,7 +1485,7 @@ function TrendPage({ filteredTechs, role }) {
       )
     ),
     React.createElement('div', { className: 'card' },
-      React.createElement('div', { className: 'card-title' }, metricLabels[metric] + ' 推移（1–8月，完整月份）'),
+      React.createElement('div', { className: 'card-title' }, metricLabels[metric] + ' 推移（1–9月）'),
       React.createElement(ChartCanvas, {
         type: 'line', data: lineData, height: 380,
         options: isPctMetric ? { scales: { y: { ticks: { callback: v => (v * 100).toFixed(0) + '%', color: chartTheme().muted }, grid: { color: chartTheme().grid } } } } : {}
@@ -1490,6 +1507,9 @@ const RANK_METRICS = [
   { key: 'growth', label: '成長幅度（近2月 vs 前2月）', get: t => growthRate(t), fmt: v => v == null ? '—' : (v * 100).toFixed(1) + '%' },
   { key: 'csiOverall', label: 'CSI整體滿意度', get: t => t.csiOverall, fmt: v => fmtNum(v, 2) },
   { key: 'csiRepair', label: 'CSI保修滿意度（個人）', get: t => t.csiRepair, fmt: v => fmtNum(v, 2) },
+  { key: 'generalMonthly', label: '月均一般營收（ESSS）', get: t => t.generalMonthlyAvg, fmt: fmtMoney },
+  { key: 'generalIndex', label: '一般營收指數', get: t => t.generalIndex, fmt: v => fmtNum(v, 1) },
+  { key: 'apptRate', label: '指定率（1E0）', get: t => t.apptRate, fmt: v => fmtPct(v, 1) },
   { key: 'retentionRate', label: '定保保留率', get: t => t.retentionRate, fmt: v => fmtPct(v, 1) },
   { key: 'retentionVsPlant', label: '定保保留率 vs 同廠（百分點）', get: t => t.retentionVsPlant, fmt: v => (v >= 0 ? '+' : '') + (v * 100).toFixed(1) },
 ];
@@ -1715,7 +1735,7 @@ function RetentionPage({ filteredTechs, thresholds, role, goTech, setFilters }) 
 }
 
 /* ---------------- Import page ---------------- */
-const IMPORT_FIELDS = ['日期', '服務廠名稱', '技師姓名', '工單號碼', '進廠台次', '自費工資', '自費零件', '自費外修', '自費營收', '補償工資', '補償零件', '補償營收', '總營收', '單台營收', '工資比', '補償筆數', '進廠里程'];
+const IMPORT_FIELDS = ['日期', '服務廠名稱', '技師姓名', '工單號碼', '進廠台次', '自費工資', '自費零件', '自費外修', '自費營收', '補償工資', '補償零件', '補償營收', '總營收', '單台營收', '工資比', '補償筆數', '一般營收', '指定預約筆數', '進廠里程'];
 const REQUIRED_FIELDS = ['日期', '服務廠名稱', '技師姓名', '工單號碼', '總營收'];
 
 function ImportPage() {
