@@ -297,6 +297,7 @@ const DEFAULT_THRESHOLDS = {
   revGapPct: 10, laborGapPct: 3, retentionGapPct: 3,
   compGapPct: 3, compositeGreen: 100, compositeWarn: 90,
   seniorYears: 10, newHireYears: 1,
+  utilFullLoad: 106, utilFullLabor: 300000, utilLow: 70, utilWarn: 85, utilHigh: 120,
 };
 
 /* ---------------- format helpers ---------------- */
@@ -557,6 +558,9 @@ const METRIC_GLOSSARY = [
   { title: '月均', desc: '所選「分析區間」內的加總數值 ÷ 區間內月數，用來排除月份長短造成的比較失真，方便跨區間比較。' },
   { title: '戰力資格（正式戰力／觀察期）', desc: '1–9月有效上線月份達 3 個月以上才列入「正式戰力」；未滿 3 個月列為「觀察期」。另有技師因資料不足無法排名（「資料不足」）。' },
   { title: '戰力類型（整合戰力類型）', desc: '由來源檔案依整合後的四項指數與全體基準判定，分為核心主力、產能營收型、產值營收型、穩定戰力、需改善；樣本不足者為觀察期／資料不足。各類別的細部判定門檻以來源檔案為準，本儀表板直接引用，不另行重算。' },
+  { title: '稼動率（代理指標）', desc: '來源資料沒有出勤／產出工時欄位，無法計算真正的「產出工時÷可用工時」稼動率。因此以現有資料建立代理指標：接車稼動率＝技師月接車台數 ÷「滿載基準」（預設 106 台／月，為全體正式戰力單月接車台數的第 75 百分位，可於設定頁調整）；工資產出稼動率＝月工資產出（自費工資＋補償工資＋一般工資）÷ 工資滿載基準（預設 NT$300,000）。數值愈高代表接車／工資產出愈接近同儕的高水準；若日後取得工時資料，可改為真實稼動率。' },
+  { title: '低稼動月數／波動係數', desc: '低稼動月數＝分析區間內，單月接車稼動率低於紅燈門檻的月數；波動係數＝單月接車台數的標準差 ÷ 平均，數值愈大表示接車量起伏愈大、派工愈不穩定。' },
+  { title: '閒置產能（月台數）', desc: '把技師拉回「黃燈門檻」所需補足的月接車台數＝ max(0, 滿載基準 × 黃燈% − 該技師月均接車)，加總後可視為該廠／全體尚可承接的工作量，供派工與促客參考。' },
   { title: '定保保留率', desc: '該技師於 2025 年最後一次定保的車輛（UIO），在 2026 年仍回廠定保的比例，反映客戶對該技師的黏著度。僅納入 2025 年定保工單 > 200 台的「有效技師」，且須與技師名單（廠別＋姓名）比對成功；比對不到或樣本特別少的不列入（顯示「—」）。「vs 同廠」＝技師保留率 − 該廠保留率（百分點）。' },
   { title: '3萬以下／5萬以上／10萬以上（里程）', desc: '技師接車里程區間百分比資料為「累計門檻」占比，例如「5萬以上」代表該技師接的車輛中，里程數達5萬公里以上（含10萬以上）的比例，並非互斥區間，因此三個數字加總不會是100%。維修里程分析頁另外用這三個數字換算出「3–5萬」「5–10萬」兩個互斥區間，方便畫成合計100%的圓餅圖。此資料為2026年1–8月整體區間的單一統計，不隨月份篩選變動。' },
 ];
@@ -654,6 +658,7 @@ const ICON_SHAPES = {
   mileage: [['path', { d: 'M3 14a7 7 0 0 1 14 0' }], ['path', { d: 'M10 14l3-4' }], ['circle', { cx: 10, cy: 14, r: 1, fill: 'currentColor', stroke: 'none' }]],
   revenue: [['circle', { cx: 10, cy: 10, r: 7 }], ['path', { d: 'M10 3v7h7' }]],
   trend: [['path', { d: 'M3 14l5-5 3 3 6-7' }], ['path', { d: 'M13 5h4v4' }]],
+  utilization: [['path', { d: 'M3 15a7 7 0 1 1 14 0' }], ['path', { d: 'M10 15l3.5-5' }], ['path', { d: 'M5 15h10' }]],
   retention: [['path', { d: 'M16 10a6 6 0 1 1-1.8-4.3' }], ['path', { d: 'M16 3.5v3.2h-3.2' }]],
   ranking: [['path', { d: 'M6 4h8l-1 5a3 3 0 0 1-6 0L6 4z' }], ['path', { d: 'M9 12v2h2v-2' }], ['path', { d: 'M7 16h6' }]],
   import: [['path', { d: 'M10 3v9' }], ['path', { d: 'M6.5 8.5L10 5l3.5 3.5' }], ['path', { d: 'M4 14v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2' }]],
@@ -678,6 +683,7 @@ const NAV = [
   { key: 'mileage', label: '維修里程分析', section: '分析', roles: ['manager', 'plantHead'] },
   { key: 'revenue', label: '營收結構分析', section: '分析', roles: ['manager', 'plantHead'] },
   { key: 'trend', label: '績效推移', section: '分析' },
+  { key: 'utilization', label: '稼動率分析與管理', section: '分析', roles: ['manager', 'plantHead'] },
   { key: 'retention', label: '保留率分析與管理', section: '分析', roles: ['manager', 'plantHead'] },
   { key: 'ranking', label: '排名與異常', section: '分析', roles: ['manager', 'plantHead'] },
   { key: 'import', label: '資料匯入', section: '管理', roles: ['manager'] },
@@ -689,7 +695,7 @@ function App() {
   const [page, setPage] = useState('overview');
   const [selectedTechKey, setSelectedTechKey] = useState(null);
   const [role, setRole] = useState(() => loadLS('techdash_role', { role: 'manager', plant: PLANT_NAMES[0], techKey: techKey(TECHS[0]) }));
-  const [thresholds, setThresholds] = useState(() => loadLS('techdash_thresholds', DEFAULT_THRESHOLDS));
+  const [thresholds, setThresholds] = useState(() => Object.assign({}, DEFAULT_THRESHOLDS, loadLS('techdash_thresholds', {})));
   const [filters, setFilters] = useState(defaultFilters());
 
   useEffect(() => saveLS('techdash_role', role), [role]);
@@ -720,6 +726,7 @@ function App() {
   else if (page === 'mileage') pageEl = React.createElement(MileagePage, common);
   else if (page === 'revenue') pageEl = React.createElement(RevenuePage, common);
   else if (page === 'trend') pageEl = React.createElement(TrendPage, common);
+  else if (page === 'utilization') pageEl = React.createElement(UtilizationPage, common);
   else if (page === 'retention') pageEl = React.createElement(RetentionPage, common);
   else if (page === 'ranking') pageEl = React.createElement(RankingPage, common);
   else if (page === 'import') pageEl = React.createElement(ImportPage, common);
@@ -1734,6 +1741,194 @@ function RetentionPage({ filteredTechs, thresholds, role, goTech, setFilters }) 
   );
 }
 
+/* ---------------- Utilization analysis & management (proxy metric) ---------------- */
+function utilStatus(u, th) {
+  if (u == null || isNaN(u)) return { rag: 'gray', label: '無資料' };
+  const pct = u * 100;
+  if (pct < th.utilLow) return { rag: 'critical', label: '低稼動' };
+  if (pct < th.utilWarn) return { rag: 'warn', label: '偏低' };
+  if (pct >= th.utilHigh) return { rag: 'warn', label: '高負荷' };
+  return { rag: 'good', label: '正常' };
+}
+function techLaborOut(r) { return (r.self_labor || 0) + (r.comp_labor || 0) + (r.general_labor || 0); }
+
+function UtilizationPage({ filters, filteredTechs, thresholds, role, goTech, setFilters }) {
+  const th = chartTheme();
+  const [tab, setTab] = useState('plant');
+  const [scope, setScope] = useState('all');
+  const [sortKey, setSortKey] = useState('utilAsc');
+  const full = thresholds.utilFullLoad > 0 ? thresholds.utilFullLoad : 106;
+  const fullLabor = thresholds.utilFullLabor > 0 ? thresholds.utilFullLabor : 300000;
+  const monthsInRange = MONTHS.filter(m => m >= filters.from && m <= filters.to);
+
+  const rowsAll = useMemo(() => filteredTechs.map(t => {
+    const cnts = [], labs = [], per = {};
+    monthsInRange.forEach(m => {
+      const r = techMonthly(t, m);
+      if (r && typeof r.count === 'number' && r.count > 0) {
+        cnts.push(r.count); labs.push(techLaborOut(r)); per[m] = r.count / full;
+      }
+    });
+    const avgIntake = mean(cnts), avgLabor = mean(labs);
+    const util = avgIntake == null ? null : avgIntake / full;
+    const sd = cnts.length > 1 ? Math.sqrt(cnts.reduce((a, c) => a + Math.pow(c - avgIntake, 2), 0) / cnts.length) : null;
+    const enough = hasEnoughSample(t) && util != null;
+    const st = enough ? utilStatus(util, thresholds) : { rag: 'gray', label: '無資料' };
+    return {
+      t, per, months: cnts.length, avgIntake, util, laborUtil: avgLabor == null ? null : avgLabor / fullLabor, avgLabor,
+      low: Object.values(per).filter(u => u * 100 < thresholds.utilLow).length,
+      cv: sd != null && avgIntake ? sd / avgIntake : null, st, enough,
+      idle: enough ? Math.max(0, full * thresholds.utilWarn / 100 - avgIntake) : 0,
+    };
+  }), [filteredTechs, filters.from, filters.to, thresholds]);
+
+  const valid = rowsAll.filter(r => r.enough);
+  const avgUtil = mean(valid.map(r => r.util));
+  const cntBy = lab => valid.filter(r => r.st.label === lab).length;
+  const totalIdle = valid.reduce((a, r) => a + r.idle, 0);
+
+  const visiblePlants = role.role === 'plantHead' ? PLANTS.filter(p => p.name === role.plant) : PLANTS;
+  const plantRows = useMemo(() => visiblePlants.map(p => {
+    const list = valid.filter(r => r.t.plant === p.name);
+    if (!list.length) return null;
+    const u = mean(list.map(r => r.util));
+    const sorted = [...list].sort((a, b) => a.util - b.util);
+    return {
+      plant: p.name, n: list.length, util: u, laborUtil: mean(list.map(r => r.laborUtil)),
+      lowN: list.filter(r => r.st.label === '低稼動').length, warnN: list.filter(r => r.st.label === '偏低').length, highN: list.filter(r => r.st.label === '高負荷').length,
+      idle: list.reduce((a, r) => a + r.idle, 0), spread: sorted[sorted.length - 1].util - sorted[0].util,
+      best: sorted[sorted.length - 1].t.name, worst: sorted[0].t.name,
+    };
+  }).filter(Boolean).sort((a, b) => b.util - a.util), [visiblePlants, valid]);
+
+  const plantChart = {
+    labels: plantRows.map(p => p.plant),
+    datasets: [
+      { label: '平均接車稼動率(%)', data: plantRows.map(p => +(p.util * 100).toFixed(1)), backgroundColor: plantRows.map(p => { const r = utilStatus(p.util, thresholds).rag; return r === 'critical' ? th.critical : r === 'warn' ? th.warning : th.series[0]; }), borderRadius: 4, maxBarThickness: 26 },
+      { type: 'line', label: '黃燈門檻(%)', data: plantRows.map(() => thresholds.utilWarn), borderColor: th.warning, borderWidth: 2, borderDash: [5, 4], pointRadius: 0 },
+      { type: 'line', label: '紅燈門檻(%)', data: plantRows.map(() => thresholds.utilLow), borderColor: th.critical, borderWidth: 2, borderDash: [2, 3], pointRadius: 0 },
+    ],
+  };
+  const pctAxis = { y: { min: 0, ticks: { callback: v => v + '%', color: th.muted }, grid: { color: th.grid } } };
+
+  const ragColor = r => r === 'critical' ? th.critical : r === 'warn' ? th.warning : r === 'gray' ? th.muted : th.good;
+  const ordered = useMemo(() => [...valid].sort((a, b) => a.util - b.util), [valid]);
+  const techData = {
+    labels: ordered.map(r => r.t.plant + ' · ' + r.t.name),
+    datasets: [{ label: '接車稼動率(%)', data: ordered.map(r => +(r.util * 100).toFixed(1)), backgroundColor: ordered.map(r => ragColor(r.st.rag)), borderRadius: 3, maxBarThickness: 16 }],
+  };
+
+  const shown = useMemo(() => {
+    let list = scope === 'ng' ? valid.filter(r => r.st.rag === 'critical' || r.st.rag === 'warn') : rowsAll;
+    const dirs = {
+      utilAsc: (a, b) => (a.util == null) - (b.util == null) || a.util - b.util, utilDesc: (a, b) => (a.util == null) - (b.util == null) || b.util - a.util,
+      idle: (a, b) => b.idle - a.idle, low: (a, b) => b.low - a.low, cv: (a, b) => (b.cv || 0) - (a.cv || 0),
+    };
+    return [...list].sort((a, b) => (!a.enough - !b.enough) || dirs[sortKey](a, b));
+  }, [rowsAll, valid, scope, sortKey]);
+
+  const trendAvg = monthsInRange.map(m => mean(valid.map(r => r.per[m]).filter(v => v != null)));
+  const trendData = {
+    labels: monthsInRange.map(m => MONTH_LABELS[m - 1]),
+    datasets: [
+      { label: '平均接車稼動率(%)', data: trendAvg.map(v => v == null ? null : +(v * 100).toFixed(1)), borderColor: th.series[0], backgroundColor: th.series[0], borderWidth: 2.5, tension: 0.25, pointRadius: 3 },
+      { label: '低稼動技師占比(%)', data: monthsInRange.map(m => { const l = valid.filter(r => r.per[m] != null); return l.length ? +(l.filter(r => r.per[m] * 100 < thresholds.utilLow).length / l.length * 100).toFixed(1) : null; }), borderColor: th.critical, backgroundColor: th.critical, borderWidth: 2, tension: 0.25, pointRadius: 3 },
+      { label: '黃燈門檻(%)', data: monthsInRange.map(() => thresholds.utilWarn), borderColor: th.warning, borderWidth: 1.5, borderDash: [5, 4], pointRadius: 0 },
+    ],
+  };
+
+  const cellBg = u => u == null ? 'transparent' : u * 100 < thresholds.utilLow ? 'rgba(208,59,59,0.28)' : u * 100 < thresholds.utilWarn ? 'rgba(201,133,0,0.26)' : u * 100 >= thresholds.utilHigh ? 'rgba(48,120,220,0.26)' : 'rgba(12,163,12,0.18)';
+  const heat = useMemo(() => [...rowsAll].filter(r => r.months > 0).sort((a, b) => a.t.plant.localeCompare(b.t.plant, 'zh-Hant') || a.t.name.localeCompare(b.t.name, 'zh-Hant')), [rowsAll]);
+
+  const kpi = (label, value, formatter) => React.createElement(Kpi, { label, value, formatter });
+  const sign = v => (v >= 0 ? '+' : '') + v.toFixed(1);
+  return React.createElement('div', null,
+    React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 10 } },
+      React.createElement('p', { className: 'foot-note', style: { margin: 0, flex: 1 } }, '＊代理指標：來源資料沒有出勤／產出工時，無法計算真正的工時稼動率。此頁以「月接車台數 ÷ 滿載基準（' + full + ' 台／月，全體正式戰力單月接車P75）」作為接車稼動率，並以月工資產出 ÷ NT$' + fmtInt(fullLabor) + ' 作為輔助；區間 ' + MONTH_LABELS[filters.from - 1] + '–' + MONTH_LABELS[filters.to - 1] + '，只計有接車的月份，觀察期技師不列入。基準與門檻可於「指標與門檻設定」調整。'),
+      React.createElement(GlossaryButton, { thresholds })
+    ),
+    React.createElement('div', { className: 'grid grid-kpi' },
+      kpi('有效技師數', valid.length + ' / ' + filteredTechs.length, v => v),
+      kpi('平均接車稼動率', avgUtil, v => fmtPct(v, 1)),
+      kpi('低稼動（紅燈 <' + thresholds.utilLow + '%）', cntBy('低稼動'), fmtInt),
+      kpi('偏低（黃燈 <' + thresholds.utilWarn + '%）', cntBy('偏低'), fmtInt),
+      kpi('高負荷（≥' + thresholds.utilHigh + '%）', cntBy('高負荷'), fmtInt),
+      kpi('閒置產能（補到黃燈所需月台數）', totalIdle, fmtInt)
+    ),
+    React.createElement('div', { className: 'tabs', style: { marginTop: 14 } },
+      [['plant', '服務廠層級'], ['tech', '技師個人層級'], ['month', '月別趨勢與熱圖']].map(([k, l]) => React.createElement('div', { key: k, className: 'tab' + (tab === k ? ' active' : ''), onClick: () => setTab(k) }, l))
+    ),
+    tab === 'plant' ? React.createElement(React.Fragment, null,
+      React.createElement('div', { className: 'card' },
+        React.createElement('div', { className: 'card-title' }, '各廠平均接車稼動率', React.createElement('span', { className: 'hint' }, '橘虛線＝黃燈門檻、紅虛線＝紅燈門檻；點下方列可帶入該廠篩選')),
+        plantRows.length ? React.createElement(ChartCanvas, { type: 'bar', data: plantChart, height: 320, options: { scales: pctAxis } }) : React.createElement('div', { className: 'empty-state' }, '沒有資料')
+      ),
+      React.createElement('div', { className: 'card', style: { marginTop: 14 } },
+        React.createElement('div', { className: 'card-title' }, '服務廠稼動率管理表'),
+        React.createElement('div', { className: 'table-wrap' },
+          React.createElement('table', null,
+            React.createElement('thead', null, React.createElement('tr', null, ['服務廠', '有效技師', '平均接車稼動率', '工資產出稼動率', '低稼動(紅)', '偏低(黃)', '高負荷', '廠內高低差(百分點)', '閒置產能(月台)', '最高', '最低'].map(h => React.createElement('th', { key: h }, h)))),
+            React.createElement('tbody', null, plantRows.map(p => React.createElement('tr', { key: p.plant, onClick: () => { setFilters(f => Object.assign({}, f, { plant: p.plant })); setTab('tech'); } },
+              React.createElement('td', null, p.plant), React.createElement('td', { className: 'num-cell' }, p.n),
+              React.createElement('td', { className: 'num-cell' }, React.createElement(RagBadge, { rag: utilStatus(p.util, thresholds).rag, label: fmtPct(p.util, 1) })),
+              React.createElement('td', { className: 'num-cell' }, fmtPct(p.laborUtil, 1)),
+              React.createElement('td', { className: 'num-cell' }, p.lowN), React.createElement('td', { className: 'num-cell' }, p.warnN), React.createElement('td', { className: 'num-cell' }, p.highN),
+              React.createElement('td', { className: 'num-cell' }, (p.spread * 100).toFixed(1)), React.createElement('td', { className: 'num-cell' }, fmtInt(p.idle)),
+              React.createElement('td', null, p.best), React.createElement('td', null, p.worst)
+            )))
+          )
+        )
+      )
+    ) : null,
+    tab === 'tech' ? React.createElement(React.Fragment, null,
+      React.createElement('div', { className: 'card' },
+        React.createElement('div', { className: 'card-title' }, '技師接車稼動率（低→高）', React.createElement('span', { className: 'hint' }, '紅＝低稼動、黃＝偏低或高負荷、綠＝正常；套用上方篩選')),
+        ordered.length ? React.createElement(ChartCanvas, { type: 'bar', data: techData, height: Math.max(320, ordered.length * 22), options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { min: 0, ticks: { callback: v => v + '%', color: th.muted }, grid: { color: th.grid } } } } }) : React.createElement('div', { className: 'empty-state' }, '目前篩選範圍內沒有有效技師。')
+      ),
+      React.createElement('div', { className: 'card', style: { marginTop: 14 } },
+        React.createElement('div', { className: 'card-title' }, '技師稼動率管理清單',
+          React.createElement('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
+            React.createElement(Select, { value: scope, onChange: setScope, options: [{ value: 'all', label: '全部技師' }, { value: 'ng', label: '只看紅／黃燈' }] }),
+            React.createElement(Select, { value: sortKey, onChange: setSortKey, options: [{ value: 'utilAsc', label: '依稼動率（低→高）' }, { value: 'utilDesc', label: '依稼動率（高→低）' }, { value: 'idle', label: '依閒置產能' }, { value: 'low', label: '依低稼動月數' }, { value: 'cv', label: '依波動係數' }] })
+          )
+        ),
+        React.createElement('div', { className: 'table-wrap' },
+          React.createElement('table', null,
+            React.createElement('thead', null, React.createElement('tr', null, ['服務廠', '技師', '有接車月數', '月均接車', '接車稼動率', '月均工資產出', '工資產出稼動率', '低稼動月數', '波動係數', '閒置產能(月台)', '狀態'].map(h => React.createElement('th', { key: h }, h)))),
+            React.createElement('tbody', null, shown.map(r => React.createElement('tr', { key: techKey(r.t), onClick: () => goTech(techKey(r.t)) },
+              React.createElement('td', null, r.t.plant), React.createElement('td', null, r.t.name), React.createElement('td', { className: 'num-cell' }, r.months),
+              React.createElement('td', { className: 'num-cell' }, fmtNum(r.avgIntake, 1)), React.createElement('td', { className: 'num-cell' }, fmtPct(r.util, 1)),
+              React.createElement('td', { className: 'num-cell' }, fmtMoney(r.avgLabor)), React.createElement('td', { className: 'num-cell' }, fmtPct(r.laborUtil, 1)),
+              React.createElement('td', { className: 'num-cell' }, r.enough ? r.low : '—'), React.createElement('td', { className: 'num-cell' }, fmtPct(r.cv, 1)),
+              React.createElement('td', { className: 'num-cell' }, r.enough ? fmtNum(r.idle, 1) : '—'),
+              React.createElement('td', null, React.createElement(RagBadge, { rag: r.st.rag, label: r.st.label }))
+            )))
+          )
+        )
+      )
+    ) : null,
+    tab === 'month' ? React.createElement(React.Fragment, null,
+      React.createElement('div', { className: 'card' },
+        React.createElement('div', { className: 'card-title' }, '月別平均稼動率與低稼動占比', React.createElement('span', { className: 'hint' }, '套用上方篩選（服務廠／年資／類型）')),
+        valid.length ? React.createElement(ChartCanvas, { type: 'line', data: trendData, height: 300, options: { scales: pctAxis } }) : React.createElement('div', { className: 'empty-state' }, '沒有資料')
+      ),
+      React.createElement('div', { className: 'card', style: { marginTop: 14 } },
+        React.createElement('div', { className: 'card-title' }, '技師 × 月份 接車稼動率熱圖', React.createElement('span', { className: 'hint' }, '紅＝低稼動、黃＝偏低、綠＝正常、藍＝高負荷；無接車的月份留白')),
+        React.createElement('div', { className: 'table-wrap', style: { maxHeight: 560 } },
+          React.createElement('table', null,
+            React.createElement('thead', null, React.createElement('tr', null, ['服務廠', '技師'].concat(monthsInRange.map(m => MONTH_LABELS[m - 1])).concat(['期間平均']).map(h => React.createElement('th', { key: h }, h)))),
+            React.createElement('tbody', null, heat.map(r => React.createElement('tr', { key: techKey(r.t), onClick: () => goTech(techKey(r.t)) },
+              React.createElement('td', null, r.t.plant), React.createElement('td', null, r.t.name),
+              monthsInRange.map(m => React.createElement('td', { key: m, className: 'num-cell', style: { background: cellBg(r.per[m]) } }, r.per[m] == null ? '' : (r.per[m] * 100).toFixed(0) + '%')),
+              React.createElement('td', { className: 'num-cell', style: { fontWeight: 600 } }, fmtPct(r.util, 0))
+            )))
+          )
+        )
+      )
+    ) : null
+  );
+}
+
 /* ---------------- Import page ---------------- */
 const IMPORT_FIELDS = ['日期', '服務廠名稱', '技師姓名', '工單號碼', '進廠台次', '自費工資', '自費零件', '自費外修', '自費營收', '補償工資', '補償零件', '補償營收', '總營收', '單台營收', '工資比', '補償筆數', '一般營收', '指定預約筆數', '進廠里程'];
 const REQUIRED_FIELDS = ['日期', '服務廠名稱', '技師姓名', '工單號碼', '總營收'];
@@ -1835,6 +2030,11 @@ function SettingsPage({ thresholds, setThresholds }) {
     ['revGapPct', '單台營收低於同廠平均 (%) → 觸發異常', 1],
     ['laborGapPct', '工資占比偏離同廠平均 (百分點) → 觸發異常', 0.5],
     ['retentionGapPct', '定保保留率低於同廠平均 (百分點) → 觸發異常', 0.5],
+    ['utilFullLoad', '稼動率「滿載基準」（台／月，預設＝全體正式戰力單月接車P75）', 1],
+    ['utilFullLabor', '稼動率「工資產出滿載基準」（NT$／月，預設＝全體單月工資產出P75）', 10000],
+    ['utilLow', '接車稼動率低於此值 (%) → 紅燈（低稼動）', 1],
+    ['utilWarn', '接車稼動率低於此值 (%) → 黃燈（偏低）', 1],
+    ['utilHigh', '接車稼動率達此值 (%) 以上 → 高負荷提醒', 1],
     ['compGapPct', '補償營收占比高於同廠平均 (百分點) → 觸發異常', 0.5],
     ['compositeGreen', '綜合戰力指數 綠燈門檻（≥）', 1],
     ['compositeWarn', '綜合戰力指數 黃燈門檻（≥）', 1],
