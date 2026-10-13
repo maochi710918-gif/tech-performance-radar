@@ -297,7 +297,7 @@ const DEFAULT_THRESHOLDS = {
   revGapPct: 10, laborGapPct: 3, retentionGapPct: 3,
   compGapPct: 3, compositeGreen: 100, compositeWarn: 90,
   seniorYears: 10, newHireYears: 1,
-  utilFullLoad: 106, utilRate: 750, utilStdHours: 176, utilLow: 70, utilWarn: 85, utilHigh: 120,
+  utilFullLoad: 106, utilRate: 750, utilRateComp: 590, utilStdHours: 176, utilLow: 70, utilWarn: 85, utilHigh: 120,
 };
 
 /* ---------------- format helpers ---------------- */
@@ -558,8 +558,8 @@ const METRIC_GLOSSARY = [
   { title: '月均', desc: '所選「分析區間」內的加總數值 ÷ 區間內月數，用來排除月份長短造成的比較失真，方便跨區間比較。' },
   { title: '戰力資格（正式戰力／觀察期）', desc: '1–9月有效上線月份達 3 個月以上才列入「正式戰力」；未滿 3 個月列為「觀察期」。另有技師因資料不足無法排名（「資料不足」）。' },
   { title: '戰力類型（整合戰力類型）', desc: '由來源檔案依整合後的四項指數與全體基準判定，分為核心主力、產能營收型、產值營收型、穩定戰力、需改善；樣本不足者為觀察期／資料不足。各類別的細部判定門檻以來源檔案為準，本儀表板直接引用，不另行重算。' },
-  { title: '稼動率（代理指標）', desc: '來源資料沒有出勤／產出工時欄位，無法計算真正的「產出工時÷可用工時」稼動率。因此以現有資料建立代理指標：接車稼動率＝技師月接車台數 ÷「滿載基準」（預設 106 台／月，為全體正式戰力單月接車台數的第 75 百分位，可於設定頁調整）；售出工時＝月工資產出（自費工資＋補償工資＋一般工資）÷ 工資小時單價（預設 NT$750）；工時產出率＝售出工時 ÷ 標準出勤工時（預設 176 小時＝22天×8小時）。售出工時通常高於實際出勤工時，所以工時產出率常超過 100%，屬於「產出效率」，不是稼動率；真正的稼動率需要各技師實際出勤工時，若日後取得可直接改用。' },
-  { title: '頂車機數／人機比／每機產出', desc: '頂車機數是各廠的作業機位數（由使用者提供）。人機比＝該廠技師數 ÷ 頂車機數；每機月均接車＝該廠區間內全部技師接車台數 ÷ 月數 ÷ 頂車機數；每機月均售出工時＝月工資產出 ÷ 工資小時單價 ÷ 頂車機數。用來比較各廠機位使用效率，與技師個人稼動率互相參照。' },
+  { title: '稼動率（代理指標）', desc: '來源資料沒有出勤／產出工時欄位，無法計算真正的「產出工時÷可用工時」稼動率。因此以現有資料建立代理指標：接車稼動率＝技師月接車台數 ÷「滿載基準」（預設 106 台／月，為全體正式戰力單月接車台數的第 75 百分位，可於設定頁調整）；售出工時＝自費工資 ÷ 750（正常工資每小時）＋ 補償工資 ÷ 590（補償每小時），不含一般（ESSS）工資；來源為「技師工資換算稼動工時_全裕信排名」，全裕信排名依 1–9 月總換算工時排序；工時產出率＝售出工時 ÷ 標準出勤工時（預設 176 小時＝22天×8小時）。售出工時通常高於實際出勤工時，所以工時產出率常超過 100%，屬於「產出效率」，不是稼動率；真正的稼動率需要各技師實際出勤工時，若日後取得可直接改用。' },
+  { title: '頂車機數／人機比／每機產出', desc: '頂車機數是各廠的作業機位數（由使用者提供）。人機比＝該廠技師數 ÷ 頂車機數；每機月均接車＝該廠區間內全部技師接車台數 ÷ 月數 ÷ 頂車機數；每機月均售出工時＝月售出工時（自費÷750＋補償÷590）÷ 頂車機數。用來比較各廠機位使用效率，與技師個人稼動率互相參照。' },
   { title: '人力稼動 vs 頂車機稼動（診斷四象限）', desc: '人力稼動看技師是否吃得飽（接車稼動率），頂車機稼動看機位是否被充分使用（每機月均接車 ÷ 全體每機平均）。兩者高低組合成四種情況：雙高＝產能吃緊（需增資源）；人力高機台低＝缺人不缺機位（補技師）；人力低機台高＝機位／時段集中（優化排班工位）；雙低＝進廠量不足（先促客回廠）。' },
   { title: '低稼動月數／波動係數', desc: '低稼動月數＝分析區間內，單月接車稼動率低於紅燈門檻的月數；波動係數＝單月接車台數的標準差 ÷ 平均，數值愈大表示接車量起伏愈大、派工愈不穩定。' },
   { title: '閒置產能（月台數）', desc: '把技師拉回「黃燈門檻」所需補足的月接車台數＝ max(0, 滿載基準 × 黃燈% − 該技師月均接車)，加總後可視為該廠／全體尚可承接的工作量，供派工與促客參考。' },
@@ -1122,12 +1122,11 @@ function RosterPage({ filteredTechs, filters, thresholds, goTech }) {
 // per-technician utilization (proxy) over all months; shared by the personal-analysis page
 function techUtilSummary(t, thr) {
   const full = thr.utilFullLoad > 0 ? thr.utilFullLoad : 106;
-  const rate = thr.utilRate > 0 ? thr.utilRate : 750;
   const std = thr.utilStdHours > 0 ? thr.utilStdHours : 176;
   const per = {}, cnts = [], labs = [];
   MONTHS.forEach(m => {
     const r = techMonthly(t, m);
-    if (r && typeof r.count === 'number' && r.count > 0) { cnts.push(r.count); labs.push((r.self_labor || 0) + (r.comp_labor || 0) + (r.general_labor || 0)); per[m] = r.count / full; }
+    if (r && typeof r.count === 'number' && r.count > 0) { cnts.push(r.count); labs.push(soldHours(r, thr)); per[m] = r.count / full; }
   });
   const avgIntake = mean(cnts), avgLabor = mean(labs);
   const util = avgIntake == null ? null : avgIntake / full;
@@ -1135,7 +1134,7 @@ function techUtilSummary(t, thr) {
   const sd = cnts.length > 1 ? Math.sqrt(cnts.reduce((a, c) => a + Math.pow(c - avgIntake, 2), 0) / cnts.length) : null;
   return {
     per, util, enough, st: enough ? utilStatus(util, thr) : { rag: 'gray', label: '無資料' },
-    hours: avgLabor == null ? null : avgLabor / rate, hourEff: avgLabor == null ? null : avgLabor / rate / std,
+    hours: avgLabor, hourEff: avgLabor == null ? null : avgLabor / std,
     low: Object.values(per).filter(u => u * 100 < thr.utilLow).length, cv: sd != null && avgIntake ? sd / avgIntake : null, months: cnts.length,
   };
 }
@@ -1257,6 +1256,8 @@ function TechDetailPage({ techKey: selKey, setTechKey, thresholds, role }) {
           React.createElement(Kpi, { label: '低稼動月數（<' + thresholds.utilLow + '%）', value: ut.enough ? ut.low + ' / ' + ut.months : null, formatter: v => v == null ? '—' : v }),
           React.createElement(Kpi, { label: '月均售出工時（h）', value: ut.hours, formatter: v => fmtNum(v, 0) }),
           React.createElement(Kpi, { label: '工時產出率（售出÷標準出勤）', value: ut.hourEff, formatter: v => fmtPct(v, 0) }),
+          React.createElement(Kpi, { label: 'YTD 換算工時（h）＝自費÷750＋補償÷590', value: tech.soldHoursTotal, formatter: v => fmtInt(v) }),
+          React.createElement(Kpi, { label: '全裕信工時排名（1–9月）', value: tech.soldHoursRank, formatter: v => v ? '第 ' + v + ' / ' + TECHS.length + ' 名' : '—' }),
           React.createElement(Kpi, { label: 'YTD 總營收', value: tech.totalRevenue, formatter: fmtMoney }),
           React.createElement(Kpi, { label: '月均接車台數', value: tech.avgMonthlyIntake, formatter: v => fmtNum(v, 1) }),
           React.createElement(Kpi, { label: '月均營收', value: tech.avgMonthlyIntake * tech.weightedRevPerUnit, formatter: fmtMoney }),
@@ -1809,7 +1810,8 @@ function utilStatus(u, th) {
 }
 // lift count of a plant in month m (monthly history if present, else the current count)
 function liftsAt(p, m) { return (p.liftsMonthly && p.liftsMonthly[m - 1] != null) ? p.liftsMonthly[m - 1] : (p.lifts || 0); }
-function techLaborOut(r) { return (r.self_labor || 0) + (r.comp_labor || 0) + (r.general_labor || 0); }
+// sold (standard) hours of a month: self-pay labor / 750 + compensation labor / 590 (general/ESSS labor excluded)
+function soldHours(r, thr) { return (r.self_labor || 0) / (thr.utilRate > 0 ? thr.utilRate : 750) + (r.comp_labor || 0) / (thr.utilRateComp > 0 ? thr.utilRateComp : 590); }
 
 function UtilizationPage({ filters, filteredTechs, thresholds, role, goTech, setFilters }) {
   const th = chartTheme();
@@ -1817,7 +1819,6 @@ function UtilizationPage({ filters, filteredTechs, thresholds, role, goTech, set
   const [scope, setScope] = useState('all');
   const [sortKey, setSortKey] = useState('utilAsc');
   const full = thresholds.utilFullLoad > 0 ? thresholds.utilFullLoad : 106;
-  const rate = thresholds.utilRate > 0 ? thresholds.utilRate : 750;
   const stdHours = thresholds.utilStdHours > 0 ? thresholds.utilStdHours : 176;
   const monthsInRange = MONTHS.filter(m => m >= filters.from && m <= filters.to);
 
@@ -1826,7 +1827,7 @@ function UtilizationPage({ filters, filteredTechs, thresholds, role, goTech, set
     monthsInRange.forEach(m => {
       const r = techMonthly(t, m);
       if (r && typeof r.count === 'number' && r.count > 0) {
-        cnts.push(r.count); labs.push(techLaborOut(r)); per[m] = r.count / full;
+        cnts.push(r.count); labs.push(soldHours(r, thresholds)); per[m] = r.count / full;
       }
     });
     const avgIntake = mean(cnts), avgLabor = mean(labs);
@@ -1835,7 +1836,7 @@ function UtilizationPage({ filters, filteredTechs, thresholds, role, goTech, set
     const enough = hasEnoughSample(t) && util != null;
     const st = enough ? utilStatus(util, thresholds) : { rag: 'gray', label: '無資料' };
     return {
-      t, per, months: cnts.length, avgIntake, util, avgHours: avgLabor == null ? null : avgLabor / rate, laborUtil: avgLabor == null ? null : avgLabor / rate / stdHours, avgLabor,
+      t, per, months: cnts.length, avgIntake, util, avgHours: avgLabor, laborUtil: avgLabor == null ? null : avgLabor / stdHours,
       low: Object.values(per).filter(u => u * 100 < thresholds.utilLow).length,
       cv: sd != null && avgIntake ? sd / avgIntake : null, st, enough,
       idle: enough ? Math.max(0, full * thresholds.utilWarn / 100 - avgIntake) : 0,
@@ -1865,9 +1866,9 @@ function UtilizationPage({ filters, filteredTechs, thresholds, role, goTech, set
     const all = TECHS.filter(t => t.plant === p.name);
     const nm = monthsInRange.length || 1;
     let intake = 0, labor = 0;
-    all.forEach(t => monthsInRange.forEach(m => { const r = techMonthly(t, m); if (r && typeof r.count === 'number') { intake += r.count; labor += techLaborOut(r); } }));
+    all.forEach(t => monthsInRange.forEach(m => { const r = techMonthly(t, m); if (r && typeof r.count === 'number') { intake += r.count; labor += soldHours(r, thresholds); } }));
     const liftMonths = monthsInRange.reduce((a, m) => a + liftsAt(p, m), 0) || 1;
-    return { plant: p.name, lifts: p.lifts, avgLifts: liftMonths / nm, techs: all.length, ratio: all.length / p.lifts, spare: Math.max(0, p.lifts - all.length), perLift: intake / liftMonths, hoursPerLift: labor / rate / liftMonths };
+    return { plant: p.name, lifts: p.lifts, avgLifts: liftMonths / nm, techs: all.length, ratio: all.length / p.lifts, spare: Math.max(0, p.lifts - all.length), perLift: intake / liftMonths, hoursPerLift: labor / liftMonths };
   }).sort((a, b) => b.perLift - a.perLift), [visiblePlants, filters.from, filters.to, thresholds]);
   const liftAvg = mean(liftRows.map(r => r.perLift));
   const liftChart = {
@@ -1955,7 +1956,7 @@ function UtilizationPage({ filters, filteredTechs, thresholds, role, goTech, set
   const sign = v => (v >= 0 ? '+' : '') + v.toFixed(1);
   return React.createElement('div', null,
     React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 10 } },
-      React.createElement('p', { className: 'foot-note', style: { margin: 0, flex: 1 } }, '＊代理指標：來源資料沒有出勤／產出工時，無法計算真正的工時稼動率。此頁以「月接車台數 ÷ 滿載基準（' + full + ' 台／月，全體正式戰力單月接車P75）」作為接車稼動率，另把工資依 NT$' + fmtInt(rate) + '／小時換算為「售出工時」，並以售出工時 ÷ 標準出勤 ' + stdHours + ' 小時作為「工時產出率」（可超過100%，不等同稼動率）；區間 ' + MONTH_LABELS[filters.from - 1] + '–' + MONTH_LABELS[filters.to - 1] + '，只計有接車的月份，觀察期技師不列入。基準與門檻可於「指標與門檻設定」調整。'),
+      React.createElement('p', { className: 'foot-note', style: { margin: 0, flex: 1 } }, '＊代理指標：來源資料沒有出勤／產出工時，無法計算真正的工時稼動率。此頁以「月接車台數 ÷ 滿載基準（' + full + ' 台／月，全體正式戰力單月接車P75）」作為接車稼動率，另把工資換算為「售出工時」（自費工資 ÷ ' + (thresholds.utilRate || 750) + '、補償工資 ÷ ' + (thresholds.utilRateComp || 590) + '，不含一般工資），並以售出工時 ÷ 標準出勤 ' + stdHours + ' 小時作為「工時產出率」（可超過100%，不等同稼動率）；區間 ' + MONTH_LABELS[filters.from - 1] + '–' + MONTH_LABELS[filters.to - 1] + '，只計有接車的月份，觀察期技師不列入。基準與門檻可於「指標與門檻設定」調整。'),
       React.createElement(GlossaryButton, { thresholds })
     ),
     React.createElement('div', { className: 'grid grid-kpi' },
@@ -2021,11 +2022,12 @@ function UtilizationPage({ filters, filteredTechs, thresholds, role, goTech, set
         ),
         React.createElement('div', { className: 'table-wrap' },
           React.createElement('table', null,
-            React.createElement('thead', null, React.createElement('tr', null, ['服務廠', '技師', '有接車月數', '月均接車', '接車稼動率', '月均售出工時(h)', '工時產出率', '低稼動月數', '波動係數', '閒置產能(月台)', '狀態'].map(h => React.createElement('th', { key: h }, h)))),
+            React.createElement('thead', null, React.createElement('tr', null, ['服務廠', '技師', '有接車月數', '月均接車', '接車稼動率', '月均售出工時(h)', '工時產出率', '全裕信工時排名', '低稼動月數', '波動係數', '閒置產能(月台)', '狀態'].map(h => React.createElement('th', { key: h }, h)))),
             React.createElement('tbody', null, shown.map(r => React.createElement('tr', { key: techKey(r.t), onClick: () => goTech(techKey(r.t)) },
               React.createElement('td', null, r.t.plant), React.createElement('td', null, r.t.name), React.createElement('td', { className: 'num-cell' }, r.months),
               React.createElement('td', { className: 'num-cell' }, fmtNum(r.avgIntake, 1)), React.createElement('td', { className: 'num-cell' }, fmtPct(r.util, 1)),
               React.createElement('td', { className: 'num-cell' }, fmtNum(r.avgHours, 0)), React.createElement('td', { className: 'num-cell' }, fmtPct(r.laborUtil, 0)),
+              React.createElement('td', { className: 'num-cell' }, r.t.soldHoursRank ? '第 ' + r.t.soldHoursRank + ' 名' : '—'),
               React.createElement('td', { className: 'num-cell' }, r.enough ? r.low : '—'), React.createElement('td', { className: 'num-cell' }, fmtPct(r.cv, 1)),
               React.createElement('td', { className: 'num-cell' }, r.enough ? fmtNum(r.idle, 1) : '—'),
               React.createElement('td', null, React.createElement(RagBadge, { rag: r.st.rag, label: r.st.label }))
@@ -2195,7 +2197,8 @@ function SettingsPage({ thresholds, setThresholds }) {
     ['laborGapPct', '工資占比偏離同廠平均 (百分點) → 觸發異常', 0.5],
     ['retentionGapPct', '定保保留率低於同廠平均 (百分點) → 觸發異常', 0.5],
     ['utilFullLoad', '稼動率「滿載基準」（台／月，預設＝全體正式戰力單月接車P75）', 1],
-    ['utilRate', '工資小時單價（NT$／小時，用於把工資換算為售出工時）', 10],
+    ['utilRate', '正常（自費）工資小時單價（NT$／小時）', 10],
+    ['utilRateComp', '補償工資小時單價（NT$／小時）', 10],
     ['utilStdHours', '每人每月標準出勤工時（小時，預設 22天×8小時）', 1],
     ['utilLow', '接車稼動率低於此值 (%) → 紅燈（低稼動）', 1],
     ['utilWarn', '接車稼動率低於此值 (%) → 黃燈（偏低）', 1],
