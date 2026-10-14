@@ -747,6 +747,66 @@ function NavIcon({ name }) {
   );
 }
 
+/* ---------------- admin password gate (client-side only) ---------------- */
+const ADMIN_PAGES = ['import', 'settings', 'roles'];
+const ADMIN_HASH = '79cf4effe1d999479e6bb9633ffc2103ef1de43fc4e7ef65872096b7b84b969b';
+function sha256Fallback(str) {
+  const bytes = Array.from(new TextEncoder().encode(str));
+  const K = [0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  let h = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  const l = bytes.length * 8; bytes.push(0x80);
+  while (bytes.length % 64 !== 56) bytes.push(0);
+  for (let i = 7; i >= 0; i--) bytes.push(i >= 4 ? 0 : (l >>> (i * 8)) & 255);
+  const rotr = (x, n) => (x >>> n) | (x << (32 - n));
+  for (let o = 0; o < bytes.length; o += 64) {
+    const w = [];
+    for (let i = 0; i < 16; i++) w[i] = (bytes[o + i * 4] << 24) | (bytes[o + i * 4 + 1] << 16) | (bytes[o + i * 4 + 2] << 8) | bytes[o + i * 4 + 3];
+    for (let i = 16; i < 64; i++) { const s0 = rotr(w[i - 15], 7) ^ rotr(w[i - 15], 18) ^ (w[i - 15] >>> 3), s1 = rotr(w[i - 2], 17) ^ rotr(w[i - 2], 19) ^ (w[i - 2] >>> 10); w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0; }
+    let [a, b, c, d, e, f, g, hh] = h;
+    for (let i = 0; i < 64; i++) {
+      const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25), ch = (e & f) ^ (~e & g), t1 = (hh + S1 + ch + K[i] + w[i]) | 0;
+      const S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22), mj = (a & b) ^ (a & c) ^ (b & c), t2 = (S0 + mj) | 0;
+      hh = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+    }
+    h = [(h[0] + a) | 0, (h[1] + b) | 0, (h[2] + c) | 0, (h[3] + d) | 0, (h[4] + e) | 0, (h[5] + f) | 0, (h[6] + g) | 0, (h[7] + hh) | 0];
+  }
+  return h.map(x => ('00000000' + (x >>> 0).toString(16)).slice(-8)).join('');
+}
+async function sha256Hex(str) {
+  try {
+    if (window.crypto && window.crypto.subtle) {
+      const buf = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+      return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+  } catch (e) {}
+  return sha256Fallback(str);
+}
+function LockScreen({ onUnlock }) {
+  const [pw, setPw] = useState('');
+  const [err, setErr] = useState('');
+  const [fails, setFails] = useState(0);
+  const [lockedUntil, setLockedUntil] = useState(0);
+  async function submit() {
+    if (Date.now() < lockedUntil) { setErr('嘗試次數過多，請稍後再試。'); return; }
+    const hex = await sha256Hex(pw);
+    if (hex === ADMIN_HASH) { setErr(''); onUnlock(); return; }
+    const n = fails + 1; setFails(n); setPw('');
+    if (n >= 5) { setLockedUntil(Date.now() + 15000); setFails(0); setErr('密碼錯誤次數過多，請 15 秒後再試。'); } else setErr('密碼錯誤（' + n + ' / 5）。');
+  }
+  return React.createElement('div', { className: 'card', style: { maxWidth: 420, margin: '40px auto' } },
+    React.createElement('div', { className: 'card-title' }, '🔒 管理功能需要密碼'),
+    React.createElement('p', { className: 'foot-note', style: { marginBottom: 12 } }, '「資料匯入」、「指標與門檻設定」、「使用者權限管理」屬於管理功能，請輸入密碼後使用。解鎖後在本次瀏覽期間有效，關閉或重新整理頁面後需再次輸入。'),
+    React.createElement('div', { className: 'field' },
+      React.createElement('label', null, '密碼'),
+      React.createElement('input', { type: 'password', value: pw, autoFocus: true, autoComplete: 'off', onChange: e => setPw(e.target.value), onKeyDown: e => { if (e.key === 'Enter') submit(); } })
+    ),
+    err ? React.createElement('p', { style: { color: 'var(--critical)', fontSize: 12.5, margin: '8px 0 0' } }, err) : null,
+    React.createElement('div', { style: { display: 'flex', gap: 8, marginTop: 14 } },
+      React.createElement('button', { className: 'btn btn-primary', onClick: submit }, '解鎖')
+    )
+  );
+}
+
 /* ================= App ================= */
 const NAV = [
   { key: 'overview', label: '綜合總覽', section: '分析' },
@@ -769,6 +829,9 @@ const NAV = [
 function App() {
   const [page, setPage] = useState('overview');
   const [selectedTechKey, setSelectedTechKey] = useState(null);
+  const [adminOk, setAdminOk] = useState(() => { try { return sessionStorage.getItem('techdash_admin') === '1'; } catch (e) { return false; } });
+  const unlockAdmin = () => { setAdminOk(true); try { sessionStorage.setItem('techdash_admin', '1'); } catch (e) {} };
+  const lockAdmin = () => { setAdminOk(false); try { sessionStorage.removeItem('techdash_admin'); } catch (e) {} };
   const [role, setRole] = useState(() => loadLS('techdash_role', { role: 'manager', plant: PLANT_NAMES[0], techKey: techKey(TECHS[0]) }));
   const [thresholds, setThresholds] = useState(() => Object.assign({}, DEFAULT_THRESHOLDS, loadLS('techdash_thresholds_v2', {})));
   const [filters, setFilters] = useState(defaultFilters());
@@ -805,6 +868,7 @@ function App() {
   else if (page === 'utilization') pageEl = React.createElement(UtilizationPage, common);
   else if (page === 'retention') pageEl = React.createElement(RetentionPage, common);
   else if (page === 'ranking') pageEl = React.createElement(RankingPage, common);
+  else if (ADMIN_PAGES.includes(page) && !adminOk) pageEl = React.createElement(LockScreen, { onUnlock: unlockAdmin });
   else if (page === 'import') pageEl = React.createElement(ImportPage, common);
   else if (page === 'settings') pageEl = React.createElement(SettingsPage, { thresholds, setThresholds });
   else if (page === 'roles') pageEl = React.createElement(RolesPage, { role, setRole });
@@ -830,13 +894,14 @@ function App() {
             items.map(n => React.createElement('div', {
               key: n.key, className: 'nav-item' + (page === n.key ? ' active' : ''),
               onClick: () => setPage(n.key)
-            }, React.createElement('span', { className: 'nav-icon' }, React.createElement(NavIcon, { name: n.key })), n.label))
+            }, React.createElement('span', { className: 'nav-icon' }, React.createElement(NavIcon, { name: n.key })), n.label + (ADMIN_PAGES.includes(n.key) && !adminOk ? ' 🔒' : '')))
           );
         })
       ),
       React.createElement('div', { className: 'sidebar-foot' },
         React.createElement('div', { className: 'role-pill' }, '👤 ' + roleLabel + (role.role === 'plantHead' ? ' · ' + role.plant : '')),
-        React.createElement('div', null, '資料截至 ' + DATA.meta.updatedThrough)
+        React.createElement('div', null, '資料截至 ' + DATA.meta.updatedThrough),
+        adminOk ? React.createElement('button', { className: 'btn btn-ghost btn-sm', style: { marginTop: 8 }, onClick: () => { lockAdmin(); if (ADMIN_PAGES.includes(page)) setPage('overview'); } }, '🔓 鎖定管理功能') : null
       )
     ),
     React.createElement('div', { className: 'main' },
