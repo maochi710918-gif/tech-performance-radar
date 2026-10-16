@@ -235,7 +235,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
-<script src="data.js"></script>
+<script src="data.js" charset="utf-8"></script>
 
 <script type="text/babel">
 const { useState, useMemo, useEffect, useRef, useCallback } = React;
@@ -738,6 +738,7 @@ const ICON_SHAPES = {
   ranking: [['path', { d: 'M6 4h8l-1 5a3 3 0 0 1-6 0L6 4z' }], ['path', { d: 'M9 12v2h2v-2' }], ['path', { d: 'M7 16h6' }]],
   import: [['path', { d: 'M10 3v9' }], ['path', { d: 'M6.5 8.5L10 5l3.5 3.5' }], ['path', { d: 'M4 14v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2' }]],
   settings: [['line', { x1: 4, y1: 5, x2: 16, y2: 5 }], ['circle', { cx: 8, cy: 5, r: 1.6 }], ['line', { x1: 4, y1: 10, x2: 16, y2: 10 }], ['circle', { cx: 13, cy: 10, r: 1.6 }], ['line', { x1: 4, y1: 15, x2: 16, y2: 15 }], ['circle', { cx: 7, cy: 15, r: 1.6 }]],
+  auditlog: [['line', { x1: 5, y1: 5, x2: 15, y2: 5 }], ['line', { x1: 5, y1: 10, x2: 15, y2: 10 }], ['line', { x1: 5, y1: 15, x2: 11, y2: 15 }]],
   account: [['circle', { cx: 10, cy: 7, r: 3 }], ['path', { d: 'M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6' }]],
   roles: [['path', { d: 'M10 3l6 2v5c0 4-2.7 6.5-6 7-3.3-.5-6-3-6-7V5l6-2z' }]],
 };
@@ -756,7 +757,7 @@ const AUTH_ENABLED = true; // 私人 Artifact 版會改成 false（由 claude.ai
 const SUPABASE_URL = 'https://lhkdnfrareofawkdmunz.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_eSEri2_WtVda1a7BbzZzgg_2BpFZJDu';
 const IDLE_LIMIT_MIN = 30; // 閒置幾分鐘自動登出
-const ADMIN_PAGES = ['import', 'settings', 'roles'];
+const ADMIN_PAGES = ['import', 'settings', 'roles', 'auditlog'];
 const toInternalEmail = account => account.trim().toLowerCase() + '@yuxin.internal';
 const sb = (AUTH_ENABLED && window.supabase) ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
@@ -851,6 +852,82 @@ function ChangePasswordCard({ user, forced, onDone }) {
   );
 }
 
+// 稽核紀錄（與「售服績效戰情中心」共用 audit_log；資料庫的列級權限已限制：一般使用者只看得到自己的、管理員看全部）
+const AUDIT_ACTION_LABEL = {
+  login_success: '登入成功', login_fail: '登入失敗', logout: '登出',
+  update_account: '修改帳號', update_password: '修改密碼',
+  admin_reset_password: '管理員重設密碼', status_change: '帳號狀態變更',
+  permission_change: '權限調整', export_log: '匯出紀錄',
+};
+function fmtDateTime(s) {
+  if (!s) return '—';
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return s;
+  const p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+function fetchAuditLog(o) {
+  o = o || {};
+  let q = sb.from('audit_log').select('*').order('created_at', { ascending: false }).limit(500);
+  if (o.account) q = q.or('actor_account.eq.' + o.account + ',target_account.eq.' + o.account);
+  if (o.actionType) q = q.eq('action_type', o.actionType);
+  if (o.result) q = q.eq('result', o.result);
+  if (o.from) q = q.gte('created_at', o.from + 'T00:00:00');
+  if (o.to) q = q.lte('created_at', o.to + 'T23:59:59');
+  return q.then(res => { if (res.error) throw res.error; return res.data || []; });
+}
+function exportAuditExcel(rows, summary) {
+  const header = ['時間', '帳號', '活動類型', '結果', '操作者', '來源IP', '裝置/瀏覽器', '內容'];
+  const aoa = [['匯出時間', fmtDateTime(new Date().toISOString())], ['查詢條件', summary], [], header].concat(rows.map(r => [
+    fmtDateTime(r.created_at), r.target_account || r.actor_account || '', AUDIT_ACTION_LABEL[r.action_type] || r.action_type, r.result === 'success' ? '成功' : '失敗',
+    r.actor_account || '', r.ip_address || '無法取得', r.user_agent || '無法取得', r.detail ? JSON.stringify(r.detail) : '',
+  ]));
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{ wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 8 }, { wch: 14 }, { wch: 16 }, { wch: 30 }, { wch: 40 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '稽核紀錄');
+  XLSX.writeFile(wb, '裕信技師績效雷達_稽核紀錄_' + Date.now() + '.xlsx');
+  sb.rpc('log_export', { filter_summary: { text: summary } }).then(() => {});
+}
+function AuditLogCard({ title, withFilters }) {
+  const [rows, setRows] = useState(null);
+  const [err, setErr] = useState('');
+  const [f, setF] = useState({ account: '', actionType: '', result: '', from: '', to: '' });
+  const setK = (k, v) => setF(x => Object.assign({}, x, { [k]: v }));
+  function load() {
+    setRows(null); setErr('');
+    fetchAuditLog(withFilters ? { account: f.account.trim(), actionType: f.actionType, result: f.result, from: f.from, to: f.to } : {})
+      .then(setRows).catch(() => { setRows([]); setErr('讀取紀錄失敗，請稍後再試。'); });
+  }
+  useEffect(() => { load(); }, []);
+  const summary = (() => { const p = []; if (f.account.trim()) p.push('帳號=' + f.account.trim()); if (f.actionType) p.push('類型=' + (AUDIT_ACTION_LABEL[f.actionType] || f.actionType)); if (f.result) p.push('結果=' + (f.result === 'success' ? '成功' : '失敗')); if (f.from) p.push('從=' + f.from); if (f.to) p.push('到=' + f.to); return p.length ? p.join('、') : '全部'; })();
+  return React.createElement('div', { className: 'card', style: { marginTop: 14 } },
+    React.createElement('div', { className: 'card-title' }, title, React.createElement('span', { className: 'hint' }, rows ? '最近 ' + rows.length + ' 筆（最多 500）' : '載入中…')),
+    withFilters ? React.createElement('div', { className: 'filter-bar', style: { marginBottom: 12 } },
+      React.createElement('div', { className: 'field' }, React.createElement('label', null, '帳號'), React.createElement('input', { type: 'text', value: f.account, onChange: e => setK('account', e.target.value), style: { width: 120 } })),
+      React.createElement('div', { className: 'field' }, React.createElement('label', null, '活動類型'), React.createElement(Select, { value: f.actionType, onChange: v => setK('actionType', v), options: [{ value: '', label: '全部' }].concat(Object.keys(AUDIT_ACTION_LABEL).map(k => ({ value: k, label: AUDIT_ACTION_LABEL[k] }))) })),
+      React.createElement('div', { className: 'field' }, React.createElement('label', null, '結果'), React.createElement(Select, { value: f.result, onChange: v => setK('result', v), options: [{ value: '', label: '全部' }, { value: 'success', label: '成功' }, { value: 'fail', label: '失敗' }] })),
+      React.createElement('div', { className: 'field' }, React.createElement('label', null, '從'), React.createElement('input', { type: 'date', value: f.from, onChange: e => setK('from', e.target.value) })),
+      React.createElement('div', { className: 'field' }, React.createElement('label', null, '到'), React.createElement('input', { type: 'date', value: f.to, onChange: e => setK('to', e.target.value) })),
+      React.createElement('div', { className: 'field', style: { justifyContent: 'flex-end', flexDirection: 'row', gap: 8, alignItems: 'flex-end' } },
+        React.createElement('button', { className: 'btn btn-primary', onClick: load }, '查詢'),
+        React.createElement('button', { className: 'btn', onClick: () => { if (!rows || !rows.length) { alert('目前沒有資料可以匯出'); return; } exportAuditExcel(rows, summary); } }, '匯出 Excel'))
+    ) : null,
+    err ? React.createElement('div', { style: { color: 'var(--critical)', fontSize: 12.5, marginBottom: 8 } }, err) : null,
+    rows && rows.length ? React.createElement('div', { className: 'table-wrap', style: { maxHeight: 560 } }, React.createElement('table', null,
+      React.createElement('thead', null, React.createElement('tr', null, ['時間', '帳號', '活動類型', '結果', '操作者', '來源IP', '裝置/瀏覽器', '內容'].map(h => React.createElement('th', { key: h }, h)))),
+      React.createElement('tbody', null, rows.map((r, i) => React.createElement('tr', { key: i },
+        React.createElement('td', null, fmtDateTime(r.created_at)), React.createElement('td', null, r.target_account || r.actor_account || '—'),
+        React.createElement('td', null, AUDIT_ACTION_LABEL[r.action_type] || r.action_type),
+        React.createElement('td', { style: { fontWeight: 700, color: r.result === 'success' ? 'var(--good)' : 'var(--critical)' } }, r.result === 'success' ? '成功' : '失敗'),
+        React.createElement('td', null, r.actor_account || '—'), React.createElement('td', null, r.ip_address || '無法取得'),
+        React.createElement('td', { title: r.user_agent || '', style: { maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, r.user_agent || '無法取得'),
+        React.createElement('td', { style: { maxWidth: 220, whiteSpace: 'normal', fontSize: 11.5 } }, r.detail ? JSON.stringify(r.detail) : '—')
+      )))
+    )) : (rows ? React.createElement('div', { className: 'empty-state' }, '沒有紀錄') : null)
+  );
+}
+
 function AccountPage({ user, onLogout, onPasswordChanged }) {
   return React.createElement('div', null,
     React.createElement('div', { className: 'card', style: { maxWidth: 420, marginBottom: 14 } },
@@ -861,14 +938,15 @@ function AccountPage({ user, onLogout, onPasswordChanged }) {
       React.createElement('div', { className: 'stat-row' }, React.createElement('span', null, '權限'), React.createElement('b', null, user.role === 'admin' ? '管理員（可使用管理功能）' : '一般使用者')),
       React.createElement('div', { style: { marginTop: 12 } }, React.createElement('button', { className: 'btn', onClick: onLogout }, '登出'))
     ),
-    React.createElement(ChangePasswordCard, { user, forced: false, onDone: onPasswordChanged })
+    React.createElement(ChangePasswordCard, { user, forced: false, onDone: onPasswordChanged }),
+    React.createElement(AuditLogCard, { title: '我的登入與帳號紀錄', withFilters: false })
   );
 }
 
 function NoPermission() {
   return React.createElement('div', { className: 'card', style: { maxWidth: 460, margin: '40px auto' } },
     React.createElement('div', { className: 'card-title' }, '🔒 需要管理員權限'),
-    React.createElement('p', { className: 'foot-note' }, '「資料匯入」、「指標與門檻設定」、「使用者權限管理」僅限管理員帳號使用。如需使用，請聯絡管理員在「售服績效戰情中心」的帳號與權限管理中調整您的角色。')
+    React.createElement('p', { className: 'foot-note' }, '「資料匯入」、「指標與門檻設定」、「使用者權限管理」、「登入與帳號紀錄」僅限管理員帳號使用。如需使用，請聯絡管理員在「售服績效戰情中心」的帳號與權限管理中調整您的角色。')
   );
 }
 
@@ -887,6 +965,7 @@ const NAV = [
   { key: 'retention', label: '保留率分析與管理', section: '分析', roles: ['manager', 'plantHead'] },
   { key: 'ranking', label: '排名與異常', section: '分析', roles: ['manager', 'plantHead'] },
   { key: 'account', label: '個人帳號設定', section: '管理' },
+  { key: 'auditlog', label: '登入與帳號紀錄', section: '管理' },
   { key: 'import', label: '資料匯入', section: '管理', roles: ['manager'] },
   { key: 'settings', label: '指標與門檻設定', section: '管理', roles: ['manager'] },
   { key: 'roles', label: '使用者權限管理', section: '管理' },
@@ -939,7 +1018,7 @@ function App() {
   }, [role]);
   const filteredTechs = useMemo(() => filterTechs(visibleTechs, scopedFilters, role.role === 'tech'), [visibleTechs, scopedFilters, role.role]);
 
-  const navItems = NAV.filter(n => (!n.roles || n.roles.includes(role.role)) && (n.key !== 'account' || AUTH_ENABLED));
+  const navItems = NAV.filter(n => (!n.roles || n.roles.includes(role.role)) && ((n.key !== 'account' && n.key !== 'auditlog') || AUTH_ENABLED));
 
   function goTech(k) { setSelectedTechKey(k); setPage('techDetail'); }
 
@@ -965,6 +1044,7 @@ function App() {
   else if (page === 'ranking') pageEl = React.createElement(RankingPage, common);
   else if (page === 'account') pageEl = React.createElement(AccountPage, { user: auth.user, onLogout: () => doLogout(), onPasswordChanged: () => {} });
   else if (ADMIN_PAGES.includes(page) && !isAdmin) pageEl = React.createElement(NoPermission, null);
+  else if (page === 'auditlog') pageEl = React.createElement(AuditLogCard, { title: '登入與帳號操作紀錄（全部帳號）', withFilters: true });
   else if (page === 'import') pageEl = React.createElement(ImportPage, common);
   else if (page === 'settings') pageEl = React.createElement(SettingsPage, { thresholds, setThresholds });
   else if (page === 'roles') pageEl = React.createElement(RolesPage, { role, setRole });
@@ -1007,7 +1087,7 @@ function App() {
       React.createElement('div', { className: 'topbar' },
         React.createElement('div', { className: 'page-title' }, titleMap[page]),
         React.createElement('div', { className: 'page-sub' }, '2026年1–9月 技師戰力分析｜戰力評分七項加權（滿分100）｜資料含 ' + PLANTS.length + ' 廠、' + OVERALL['總技師數'] + ' 位技師｜205自費／補償＋ESSS一般營收＋1E0指定率＋ES自主市調'),
-        (page !== 'settings' && page !== 'roles' && page !== 'import' && page !== 'account') ? React.createElement(GlobalFilterBar, { filters, setFilters, role }) : null
+        (page !== 'settings' && page !== 'roles' && page !== 'import' && page !== 'account' && page !== 'auditlog') ? React.createElement(GlobalFilterBar, { filters, setFilters, role }) : null
       ),
       React.createElement('div', { className: 'content' }, pageEl)
     )
