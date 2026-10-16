@@ -233,6 +233,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
 <script src="data.js"></script>
 
@@ -737,6 +738,7 @@ const ICON_SHAPES = {
   ranking: [['path', { d: 'M6 4h8l-1 5a3 3 0 0 1-6 0L6 4z' }], ['path', { d: 'M9 12v2h2v-2' }], ['path', { d: 'M7 16h6' }]],
   import: [['path', { d: 'M10 3v9' }], ['path', { d: 'M6.5 8.5L10 5l3.5 3.5' }], ['path', { d: 'M4 14v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2' }]],
   settings: [['line', { x1: 4, y1: 5, x2: 16, y2: 5 }], ['circle', { cx: 8, cy: 5, r: 1.6 }], ['line', { x1: 4, y1: 10, x2: 16, y2: 10 }], ['circle', { cx: 13, cy: 10, r: 1.6 }], ['line', { x1: 4, y1: 15, x2: 16, y2: 15 }], ['circle', { cx: 7, cy: 15, r: 1.6 }]],
+  account: [['circle', { cx: 10, cy: 7, r: 3 }], ['path', { d: 'M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6' }]],
   roles: [['path', { d: 'M10 3l6 2v5c0 4-2.7 6.5-6 7-3.3-.5-6-3-6-7V5l6-2z' }]],
 };
 function NavIcon({ name }) {
@@ -747,63 +749,126 @@ function NavIcon({ name }) {
   );
 }
 
-/* ---------------- admin password gate (client-side only) ---------------- */
+/* ---------------- 帳號登入（共用「售服績效戰情中心」的 Supabase 帳號） ---------------- */
+// 帳號、密碼、角色、停用狀態都在 Supabase 伺服器端驗證；本頁只放可公開的 publishable key。
+// 注意：資料檔 data.js 仍在公開網址，登入只擋畫面，不保護資料檔本身。
+const AUTH_ENABLED = true; // 私人 Artifact 版會改成 false（由 claude.ai 的分享權限控管）
+const SUPABASE_URL = 'https://lhkdnfrareofawkdmunz.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_eSEri2_WtVda1a7BbzZzgg_2BpFZJDu';
+const IDLE_LIMIT_MIN = 30; // 閒置幾分鐘自動登出
 const ADMIN_PAGES = ['import', 'settings', 'roles'];
-const ADMIN_HASH = '79cf4effe1d999479e6bb9633ffc2103ef1de43fc4e7ef65872096b7b84b969b';
-function sha256Fallback(str) {
-  const bytes = Array.from(new TextEncoder().encode(str));
-  const K = [0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
-  let h = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
-  const l = bytes.length * 8; bytes.push(0x80);
-  while (bytes.length % 64 !== 56) bytes.push(0);
-  for (let i = 7; i >= 0; i--) bytes.push(i >= 4 ? 0 : (l >>> (i * 8)) & 255);
-  const rotr = (x, n) => (x >>> n) | (x << (32 - n));
-  for (let o = 0; o < bytes.length; o += 64) {
-    const w = [];
-    for (let i = 0; i < 16; i++) w[i] = (bytes[o + i * 4] << 24) | (bytes[o + i * 4 + 1] << 16) | (bytes[o + i * 4 + 2] << 8) | bytes[o + i * 4 + 3];
-    for (let i = 16; i < 64; i++) { const s0 = rotr(w[i - 15], 7) ^ rotr(w[i - 15], 18) ^ (w[i - 15] >>> 3), s1 = rotr(w[i - 2], 17) ^ rotr(w[i - 2], 19) ^ (w[i - 2] >>> 10); w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0; }
-    let [a, b, c, d, e, f, g, hh] = h;
-    for (let i = 0; i < 64; i++) {
-      const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25), ch = (e & f) ^ (~e & g), t1 = (hh + S1 + ch + K[i] + w[i]) | 0;
-      const S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22), mj = (a & b) ^ (a & c) ^ (b & c), t2 = (S0 + mj) | 0;
-      hh = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
-    }
-    h = [(h[0] + a) | 0, (h[1] + b) | 0, (h[2] + c) | 0, (h[3] + d) | 0, (h[4] + e) | 0, (h[5] + f) | 0, (h[6] + g) | 0, (h[7] + hh) | 0];
-  }
-  return h.map(x => ('00000000' + (x >>> 0).toString(16)).slice(-8)).join('');
+const toInternalEmail = account => account.trim().toLowerCase() + '@yuxin.internal';
+const sb = (AUTH_ENABLED && window.supabase) ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+
+// 登入成功／失敗／登出寫入共用稽核紀錄（IP 由伺服器端 Edge Function 取得）
+function authLogEvent(type, extra) {
+  if (!sb) return Promise.resolve();
+  return sb.auth.getSession().then(res => {
+    const session = res.data && res.data.session;
+    const headers = { 'Content-Type': 'application/json' };
+    if (session) headers['Authorization'] = 'Bearer ' + session.access_token;
+    return fetch(SUPABASE_URL + '/functions/v1/log-event', { method: 'POST', headers, body: JSON.stringify(Object.assign({ type, user_agent: navigator.userAgent }, extra || {})) }).catch(() => {});
+  }).catch(() => {});
 }
-async function sha256Hex(str) {
-  try {
-    if (window.crypto && window.crypto.subtle) {
-      const buf = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-      return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-    }
-  } catch (e) {}
-  return sha256Fallback(str);
+function loadProfile() {
+  return sb.auth.getSession().then(res => {
+    const session = res.data && res.data.session;
+    if (!session) return null;
+    return sb.from('app_users').select('*').eq('id', session.user.id).maybeSingle().then(r => r.data || null);
+  });
 }
-function LockScreen({ onUnlock }) {
+
+function LoginScreen({ message, onSuccess }) {
+  const [account, setAccount] = useState('');
   const [pw, setPw] = useState('');
-  const [err, setErr] = useState('');
-  const [fails, setFails] = useState(0);
-  const [lockedUntil, setLockedUntil] = useState(0);
-  async function submit() {
-    if (Date.now() < lockedUntil) { setErr('嘗試次數過多，請稍後再試。'); return; }
-    const hex = await sha256Hex(pw);
-    if (hex === ADMIN_HASH) { setErr(''); onUnlock(); return; }
-    const n = fails + 1; setFails(n); setPw('');
-    if (n >= 5) { setLockedUntil(Date.now() + 15000); setFails(0); setErr('密碼錯誤次數過多，請 15 秒後再試。'); } else setErr('密碼錯誤（' + n + ' / 5）。');
+  const [err, setErr] = useState(message || '');
+  const [busy, setBusy] = useState(false);
+  function submit() {
+    if (!account.trim() || !pw) { setErr('請輸入帳號與密碼'); return; }
+    setBusy(true); setErr('');
+    sb.auth.signInWithPassword({ email: toInternalEmail(account), password: pw }).then(res => {
+      if (res.error) { authLogEvent('login_fail', { account: account.trim() }); setErr('帳號或密碼錯誤'); setBusy(false); return; }
+      loadProfile().then(profile => {
+        if (!profile || profile.status !== 'active') {
+          setErr(profile ? '此帳號已被停用，請聯絡管理員' : '找不到帳號資料，請聯絡管理員');
+          sb.auth.signOut(); setBusy(false); return;
+        }
+        authLogEvent('login_success');
+        onSuccess(profile);
+      }).catch(() => { setErr('登入服務連線失敗，請稍後再試'); setBusy(false); });
+    }).catch(() => { setErr('登入服務連線失敗，請稍後再試'); setBusy(false); });
   }
-  return React.createElement('div', { className: 'card', style: { maxWidth: 420, margin: '40px auto' } },
-    React.createElement('div', { className: 'card-title' }, '🔒 管理功能需要密碼'),
-    React.createElement('p', { className: 'foot-note', style: { marginBottom: 12 } }, '「資料匯入」、「指標與門檻設定」、「使用者權限管理」屬於管理功能，請輸入密碼後使用。解鎖後在本次瀏覽期間有效，關閉或重新整理頁面後需再次輸入。'),
-    React.createElement('div', { className: 'field' },
-      React.createElement('label', null, '密碼'),
-      React.createElement('input', { type: 'password', value: pw, autoFocus: true, autoComplete: 'off', onChange: e => setPw(e.target.value), onKeyDown: e => { if (e.key === 'Enter') submit(); } })
-    ),
-    err ? React.createElement('p', { style: { color: 'var(--critical)', fontSize: 12.5, margin: '8px 0 0' } }, err) : null,
-    React.createElement('div', { style: { display: 'flex', gap: 8, marginTop: 14 } },
-      React.createElement('button', { className: 'btn btn-primary', onClick: submit }, '解鎖')
+  return React.createElement('div', { style: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, background: 'var(--bg-page)' } },
+    React.createElement('div', { className: 'card', style: { width: '100%', maxWidth: 380 } },
+      React.createElement('div', { style: { textAlign: 'center', marginBottom: 16 } },
+        React.createElement('div', { style: { fontSize: 20, fontWeight: 800 } }, '裕信汽車服務部'),
+        React.createElement('div', { className: 'foot-note' }, '技師績效分析雷達')
+      ),
+      !sb ? React.createElement('p', { style: { color: 'var(--critical)', fontSize: 12.5 } }, '無法載入登入元件，請檢查網路連線後重新整理頁面。') : React.createElement(React.Fragment, null,
+        React.createElement('div', { className: 'field' }, React.createElement('label', null, '帳號'),
+          React.createElement('input', { type: 'text', value: account, autoComplete: 'username', autoFocus: true, onChange: e => setAccount(e.target.value) })),
+        React.createElement('div', { className: 'field', style: { marginTop: 10 } }, React.createElement('label', null, '密碼'),
+          React.createElement('input', { type: 'password', value: pw, autoComplete: 'current-password', onChange: e => setPw(e.target.value), onKeyDown: e => { if (e.key === 'Enter') submit(); } })),
+        React.createElement('div', { style: { color: 'var(--critical)', fontSize: 12.5, minHeight: 18, margin: '10px 0' } }, err),
+        React.createElement('button', { className: 'btn btn-primary', style: { width: '100%' }, disabled: busy, onClick: submit }, busy ? '登入中…' : '登入'),
+        React.createElement('p', { className: 'foot-note', style: { marginTop: 12, textAlign: 'center' } }, '帳號與「售服績效戰情中心」共用；忘記密碼請聯絡管理員重設。')
+      )
     )
+  );
+}
+
+function ChangePasswordCard({ user, forced, onDone }) {
+  const [cur, setCur] = useState('');
+  const [n1, setN1] = useState('');
+  const [n2, setN2] = useState('');
+  const [msg, setMsg] = useState({ text: '', ok: false });
+  const [busy, setBusy] = useState(false);
+  function submit() {
+    if (!cur || !n1) { setMsg({ text: '請完整輸入', ok: false }); return; }
+    if (n1.length < 6) { setMsg({ text: '新密碼至少需要 6 碼', ok: false }); return; }
+    if (n1 !== n2) { setMsg({ text: '兩次輸入的新密碼不一致', ok: false }); return; }
+    setBusy(true); setMsg({ text: '', ok: false });
+    sb.auth.signInWithPassword({ email: toInternalEmail(user.account), password: cur }).then(res => {
+      if (res.error) { setMsg({ text: '目前密碼不正確', ok: false }); setBusy(false); return; }
+      sb.auth.updateUser({ password: n1 }).then(res2 => {
+        if (res2.error) { setMsg({ text: '更新失敗：' + res2.error.message, ok: false }); setBusy(false); return; }
+        sb.rpc('log_password_changed').then(() => {
+          setCur(''); setN1(''); setN2(''); setBusy(false); setMsg({ text: '密碼已更新成功', ok: true });
+          if (onDone) onDone();
+        });
+      });
+    }).catch(() => { setMsg({ text: '連線失敗，請稍後再試', ok: false }); setBusy(false); });
+  }
+  return React.createElement('div', { className: 'card', style: { maxWidth: 420 } },
+    React.createElement('div', { className: 'card-title' }, forced ? '⚠️ 請先設定新密碼' : '修改密碼'),
+    forced ? React.createElement('p', { className: 'foot-note', style: { marginBottom: 10 } }, '您的帳號目前使用的是初始／臨時密碼，請先改成自己的密碼才能使用儀表板。') : null,
+    React.createElement('p', { className: 'foot-note', style: { marginBottom: 10 } }, '修改前會先驗證目前密碼；新密碼由 Supabase 以安全雜湊處理，不會以明碼儲存（與「售服績效戰情中心」共用，改一次兩邊都生效）。'),
+    [['目前密碼', cur, setCur, 'current-password'], ['新密碼（至少 6 碼）', n1, setN1, 'new-password'], ['再輸入一次新密碼', n2, setN2, 'new-password']].map(([label, v, set, ac]) =>
+      React.createElement('div', { key: label, className: 'field', style: { marginBottom: 8 } }, React.createElement('label', null, label),
+        React.createElement('input', { type: 'password', value: v, autoComplete: ac, onChange: e => set(e.target.value) }))),
+    React.createElement('div', { style: { fontSize: 12.5, minHeight: 18, margin: '6px 0', color: msg.ok ? 'var(--good)' : 'var(--critical)' } }, msg.text),
+    React.createElement('button', { className: 'btn btn-primary', disabled: busy, onClick: submit }, busy ? '處理中…' : '更新密碼')
+  );
+}
+
+function AccountPage({ user, onLogout, onPasswordChanged }) {
+  return React.createElement('div', null,
+    React.createElement('div', { className: 'card', style: { maxWidth: 420, marginBottom: 14 } },
+      React.createElement('div', { className: 'card-title' }, '我的帳號'),
+      React.createElement('div', { className: 'stat-row' }, React.createElement('span', null, '帳號'), React.createElement('b', null, user.account)),
+      React.createElement('div', { className: 'stat-row' }, React.createElement('span', null, '姓名'), React.createElement('b', null, user.name || '—')),
+      React.createElement('div', { className: 'stat-row' }, React.createElement('span', null, '身分'), React.createElement('b', null, user.job_title || (user.role === 'admin' ? '管理員' : '一般使用者'))),
+      React.createElement('div', { className: 'stat-row' }, React.createElement('span', null, '權限'), React.createElement('b', null, user.role === 'admin' ? '管理員（可使用管理功能）' : '一般使用者')),
+      React.createElement('div', { style: { marginTop: 12 } }, React.createElement('button', { className: 'btn', onClick: onLogout }, '登出'))
+    ),
+    React.createElement(ChangePasswordCard, { user, forced: false, onDone: onPasswordChanged })
+  );
+}
+
+function NoPermission() {
+  return React.createElement('div', { className: 'card', style: { maxWidth: 460, margin: '40px auto' } },
+    React.createElement('div', { className: 'card-title' }, '🔒 需要管理員權限'),
+    React.createElement('p', { className: 'foot-note' }, '「資料匯入」、「指標與門檻設定」、「使用者權限管理」僅限管理員帳號使用。如需使用，請聯絡管理員在「售服績效戰情中心」的帳號與權限管理中調整您的角色。')
   );
 }
 
@@ -821,6 +886,7 @@ const NAV = [
   { key: 'utilization', label: '稼動率分析與管理', section: '分析', roles: ['manager', 'plantHead'] },
   { key: 'retention', label: '保留率分析與管理', section: '分析', roles: ['manager', 'plantHead'] },
   { key: 'ranking', label: '排名與異常', section: '分析', roles: ['manager', 'plantHead'] },
+  { key: 'account', label: '個人帳號設定', section: '管理' },
   { key: 'import', label: '資料匯入', section: '管理', roles: ['manager'] },
   { key: 'settings', label: '指標與門檻設定', section: '管理', roles: ['manager'] },
   { key: 'roles', label: '使用者權限管理', section: '管理' },
@@ -829,9 +895,32 @@ const NAV = [
 function App() {
   const [page, setPage] = useState('overview');
   const [selectedTechKey, setSelectedTechKey] = useState(null);
-  const [adminOk, setAdminOk] = useState(() => { try { return sessionStorage.getItem('techdash_admin') === '1'; } catch (e) { return false; } });
-  const unlockAdmin = () => { setAdminOk(true); try { sessionStorage.setItem('techdash_admin', '1'); } catch (e) {} };
-  const lockAdmin = () => { setAdminOk(false); try { sessionStorage.removeItem('techdash_admin'); } catch (e) {} };
+  const [auth, setAuth] = useState(AUTH_ENABLED ? { status: 'loading', user: null, msg: '' } : { status: 'in', user: { account: 'local', name: '本機', role: 'admin', status: 'active', must_change_password: false }, msg: '' });
+  const isAdmin = !AUTH_ENABLED || !!(auth.user && auth.user.role === 'admin');
+  useEffect(() => {
+    if (!AUTH_ENABLED) return;
+    if (!sb) { setAuth({ status: 'out', user: null, msg: '無法載入登入元件，請檢查網路連線後重新整理頁面。' }); return; }
+    loadProfile().then(p => {
+      if (p && p.status === 'active') setAuth({ status: 'in', user: p, msg: '' });
+      else if (p) sb.auth.signOut().then(() => setAuth({ status: 'out', user: null, msg: '此帳號已被停用，請聯絡管理員。' }));
+      else setAuth({ status: 'out', user: null, msg: '' });
+    }).catch(() => setAuth({ status: 'out', user: null, msg: '登入服務連線失敗，請稍後再試。' }));
+  }, []);
+  function doLogout(reason) {
+    return authLogEvent('logout').then(() => sb ? sb.auth.signOut() : null).then(() => {
+      setAuth({ status: 'out', user: null, msg: reason === 'idle' ? '閒置過久，已自動登出，請重新登入。' : '' });
+      setPage('overview');
+    });
+  }
+  useEffect(() => {
+    if (!AUTH_ENABLED || auth.status !== 'in') return;
+    let timer;
+    const reset = () => { clearTimeout(timer); timer = setTimeout(() => doLogout('idle'), IDLE_LIMIT_MIN * 60 * 1000); };
+    const evts = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
+    evts.forEach(e => document.addEventListener(e, reset, { passive: true }));
+    reset();
+    return () => { clearTimeout(timer); evts.forEach(e => document.removeEventListener(e, reset)); };
+  }, [auth.status]);
   const [role, setRole] = useState(() => loadLS('techdash_role', { role: 'manager', plant: PLANT_NAMES[0], techKey: techKey(TECHS[0]) }));
   const [thresholds, setThresholds] = useState(() => Object.assign({}, DEFAULT_THRESHOLDS, loadLS('techdash_thresholds_v2', {})));
   const [filters, setFilters] = useState(defaultFilters());
@@ -840,7 +929,7 @@ function App() {
   useEffect(() => saveLS('techdash_thresholds_v2', thresholds), [thresholds]);
 
   useEffect(() => {
-    if (role.role === 'tech') { setSelectedTechKey(role.techKey); setPage(p => (['overview', 'techDetail', 'trend', 'roles'].includes(p) ? p : 'overview')); }
+    if (role.role === 'tech') { setSelectedTechKey(role.techKey); setPage(p => (['overview', 'techDetail', 'trend', 'roles', 'account'].includes(p) ? p : 'overview')); }
   }, [role.role, role.techKey]);
 
   const scopedFilters = useMemo(() => applyRoleScope(filters, role), [filters, role]);
@@ -850,10 +939,16 @@ function App() {
   }, [role]);
   const filteredTechs = useMemo(() => filterTechs(visibleTechs, scopedFilters, role.role === 'tech'), [visibleTechs, scopedFilters, role.role]);
 
-  const navItems = NAV.filter(n => !n.roles || n.roles.includes(role.role));
+  const navItems = NAV.filter(n => (!n.roles || n.roles.includes(role.role)) && (n.key !== 'account' || AUTH_ENABLED));
 
   function goTech(k) { setSelectedTechKey(k); setPage('techDetail'); }
 
+  if (auth.status === 'loading') return React.createElement('div', { style: { padding: 60, textAlign: 'center', color: 'var(--text-muted)' } }, '載入中…');
+  if (auth.status === 'out') return React.createElement(LoginScreen, { message: auth.msg, onSuccess: u => setAuth({ status: 'in', user: u, msg: '' }) });
+  if (AUTH_ENABLED && auth.user && auth.user.must_change_password) {
+    return React.createElement('div', { style: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, background: 'var(--bg-page)' } },
+      React.createElement(ChangePasswordCard, { user: auth.user, forced: true, onDone: () => setAuth(a => ({ status: 'in', user: Object.assign({}, a.user, { must_change_password: false }), msg: '' })) }));
+  }
   let pageEl = null;
   const common = { filters: scopedFilters, setFilters, filteredTechs, thresholds, role, goTech };
   if (page === 'overview') pageEl = React.createElement(OverviewPage, common);
@@ -868,7 +963,8 @@ function App() {
   else if (page === 'utilization') pageEl = React.createElement(UtilizationPage, common);
   else if (page === 'retention') pageEl = React.createElement(RetentionPage, common);
   else if (page === 'ranking') pageEl = React.createElement(RankingPage, common);
-  else if (ADMIN_PAGES.includes(page) && !adminOk) pageEl = React.createElement(LockScreen, { onUnlock: unlockAdmin });
+  else if (page === 'account') pageEl = React.createElement(AccountPage, { user: auth.user, onLogout: () => doLogout(), onPasswordChanged: () => {} });
+  else if (ADMIN_PAGES.includes(page) && !isAdmin) pageEl = React.createElement(NoPermission, null);
   else if (page === 'import') pageEl = React.createElement(ImportPage, common);
   else if (page === 'settings') pageEl = React.createElement(SettingsPage, { thresholds, setThresholds });
   else if (page === 'roles') pageEl = React.createElement(RolesPage, { role, setRole });
@@ -894,21 +990,24 @@ function App() {
             items.map(n => React.createElement('div', {
               key: n.key, className: 'nav-item' + (page === n.key ? ' active' : ''),
               onClick: () => setPage(n.key)
-            }, React.createElement('span', { className: 'nav-icon' }, React.createElement(NavIcon, { name: n.key })), n.label + (ADMIN_PAGES.includes(n.key) && !adminOk ? ' 🔒' : '')))
+            }, React.createElement('span', { className: 'nav-icon' }, React.createElement(NavIcon, { name: n.key })), n.label + (ADMIN_PAGES.includes(n.key) && !isAdmin ? ' 🔒' : '')))
           );
         })
       ),
       React.createElement('div', { className: 'sidebar-foot' },
         React.createElement('div', { className: 'role-pill' }, '👤 ' + roleLabel + (role.role === 'plantHead' ? ' · ' + role.plant : '')),
         React.createElement('div', null, '資料截至 ' + DATA.meta.updatedThrough),
-        adminOk ? React.createElement('button', { className: 'btn btn-ghost btn-sm', style: { marginTop: 8 }, onClick: () => { lockAdmin(); if (ADMIN_PAGES.includes(page)) setPage('overview'); } }, '🔓 鎖定管理功能') : null
+        AUTH_ENABLED && auth.user ? React.createElement('div', { style: { marginTop: 8 } },
+          React.createElement('div', null, auth.user.name + '（' + auth.user.account + '）' + (auth.user.role === 'admin' ? ' · 管理員' : '')),
+          React.createElement('button', { className: 'btn btn-ghost btn-sm', style: { marginTop: 6 }, onClick: () => doLogout() }, '登出')
+        ) : null
       )
     ),
     React.createElement('div', { className: 'main' },
       React.createElement('div', { className: 'topbar' },
         React.createElement('div', { className: 'page-title' }, titleMap[page]),
         React.createElement('div', { className: 'page-sub' }, '2026年1–9月 技師戰力分析｜戰力評分七項加權（滿分100）｜資料含 ' + PLANTS.length + ' 廠、' + OVERALL['總技師數'] + ' 位技師｜205自費／補償＋ESSS一般營收＋1E0指定率＋ES自主市調'),
-        (page !== 'settings' && page !== 'roles' && page !== 'import') ? React.createElement(GlobalFilterBar, { filters, setFilters, role }) : null
+        (page !== 'settings' && page !== 'roles' && page !== 'import' && page !== 'account') ? React.createElement(GlobalFilterBar, { filters, setFilters, role }) : null
       ),
       React.createElement('div', { className: 'content' }, pageEl)
     )
@@ -2532,6 +2631,7 @@ function SettingsPage({ thresholds, setThresholds }) {
 function RolesPage({ role, setRole }) {
   return React.createElement('div', { className: 'card', style: { maxWidth: 640 } },
     React.createElement('div', { className: 'card-title' }, '使用者權限管理（示範）'),
+    React.createElement('p', { className: 'foot-note', style: { marginBottom: 10 } }, '帳號、密碼、管理員角色與停用，請到「售服績效戰情中心」的『帳號與權限管理』統一處理（兩個儀表板共用同一組帳號）。下方的角色切換僅用於預覽不同角色看到的畫面。 ', React.createElement('a', { href: 'https://maochi710918-gif.github.io/yuxin-service-dashboard/', target: '_blank', rel: 'noopener', style: { color: 'var(--accent)' } }, '開啟戰情中心')),
     React.createElement('p', { className: 'foot-note', style: { marginBottom: 14 } }, '切換角色以模擬不同權限視角：服務部主管可檢視所有服務廠與技師；廠長／技師長僅能檢視自己服務廠；技師僅能檢視自己的績效資料。'),
     React.createElement('div', { className: 'field', style: { marginBottom: 12 } },
       React.createElement('label', null, '角色'),
